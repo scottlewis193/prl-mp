@@ -3,6 +3,7 @@ import pb from '../pocketbase';
 import { v4 as uuid } from 'uuid';
 import { defaultRaceTrack, type RaceTrack } from '../racetrack';
 import { getContext, setContext } from 'svelte';
+import type { SortedRacer } from './racer.svelte';
 
 export interface Race {
 	id?: string;

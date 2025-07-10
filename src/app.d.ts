@@ -5,7 +5,7 @@ declare global {
 		// interface Error {}
 		interface Locals {
 			pb: import('pocketbase').default;
-			player: import('pocketbase').default['authStore']['model'];
+			user: import('pocketbase').default['authStore']['record'];
 		}
 		// interface PageData {}
 		// interface PageState {}

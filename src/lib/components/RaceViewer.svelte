@@ -80,7 +80,7 @@
 	let scale = 1;
 
 	function updateScale() {
-		windowWidth = window.innerWidth + 220;
+		windowWidth = window.innerWidth + 300;
 		windowHeight = window.innerHeight + 64;
 		scale = Math.min(windowWidth / 1280, windowHeight / 720);
 		trackEl.style.transform = `scale(${scale})`;
@@ -150,21 +150,7 @@
 </script>
 
 {#if race?.startTime !== '' && race}
-	<div
-		id="camera-controls"
-		class="bg-base-100 absolute top-0 z-100 flex h-[64px] w-full items-center justify-center gap-3 p-4 text-white"
-	>
-		<button class="btn" onclick={() => (camera.mode = 'free')}>Free Camera</button>
-		<button
-			class="btn"
-			onclick={() => {
-				camera.mode = 'follow';
-				camera.targetRacerId = racers[0].id;
-			}}>Follow Camera</button
-		>
-	</div>
 	<!-- <Debug /> -->
-
 	<LeaderBoard />
 	<CameraWrapper>
 		<div
@@ -253,4 +239,17 @@
 			</svg>
 		</div>
 	</CameraWrapper>
+	<div
+		id="camera-controls"
+		class="absolute bottom-0 left-[300px] z-100 flex h-[64px] w-[calc(100%-300px)] items-center justify-center gap-3 p-4 text-white"
+	>
+		<button class="btn btn-neutral" onclick={() => (camera.mode = 'free')}>Free Camera</button>
+		<button
+			class="btn btn-neutral"
+			onclick={() => {
+				camera.mode = 'follow';
+				camera.targetRacerId = racers[0].id;
+			}}>Follow Camera</button
+		>
+	</div>
 {/if}

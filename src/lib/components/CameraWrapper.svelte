@@ -8,13 +8,11 @@
 		if (camera.mode !== 'free') return;
 		camera.isPanning = true;
 		camera.lastMouse = { x: event.clientX, y: event.clientY };
-		console.log('mouse down');
 	}
 
 	function handleMouseMove(event: MouseEvent) {
 		if (camera.mode !== 'free' || !camera.isPanning) return;
 
-		console.log('move');
 		const dx = (event.clientX - camera.lastMouse.x) / camera.zoom;
 		const dy = (event.clientY - camera.lastMouse.y) / camera.zoom;
 

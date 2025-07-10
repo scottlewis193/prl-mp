@@ -16,7 +16,12 @@ export interface Racer {
 	trackOffset?: number;
 	targetTrackOffset: number;
 	lastOffsetChangeAt?: number;
+	lapStartTime?: number;
+	lapTimes: { [lapNumber: number]: number };
+	bestLapTime?: number;
 }
+
+export type SortedRacer = Racer & { progress: number; totalProgress: number; hasBestLap: boolean };
 
 const racersKey = Symbol('racers');
 

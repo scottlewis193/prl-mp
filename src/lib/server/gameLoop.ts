@@ -39,6 +39,8 @@ export async function startUp() {
 	//get racers
 	racers = await getRacers(race.id || '');
 
+	startLapTimer();
+
 	gameLoop();
 }
 
@@ -50,11 +52,13 @@ let lastUpdate = Date.now();
 async function gameLoop() {
 	const glInterval = setInterval(async () => {
 		const now = Date.now();
+
 		const dt = (now - lastUpdate) / 1000; // in seconds
 		lastUpdate = now;
 
 		// now use `dt` to simulate racer progress
-		// console.time('update racers');
+		// console.clear();
+		// console.time('gameloop');
 
 		//simulate racers and assign results directly
 		for (const racer of racers) {
@@ -62,8 +66,19 @@ async function gameLoop() {
 			racer.checkpointIndex = result.checkpointIndex;
 			racer.distanceFromCheckpoint = result.distanceFromCheckpoint;
 			racer.lapsCompleted = result.lapsCompleted;
-			racer.finished = result.finished;
 			racer.lastUpdatedAt = result.lastUpdatedAt;
+
+			//check if racer has finished
+			if (result.finished) {
+				//check if first racer to finish
+				if (!racers.some((r) => r.finished)) {
+					await updateRace(race.id || '0', {
+						winner: racer.id
+					});
+					console.log(`🏁 Race "${race.name}" finished. Winner: ${race?.name}`);
+				}
+				racer.finished = true;
+			}
 		}
 
 		//Resolve overtaking using computed results
@@ -73,6 +88,7 @@ async function gameLoop() {
 		await Promise.all(
 			racers.map((racer) => {
 				racer.trackOffset = racer.targetTrackOffset ?? 0;
+				// if (racer.finished) console.log(racer.finished);
 				return updateRacer(racer.id, {
 					checkpointIndex: racer.checkpointIndex,
 					distanceFromCheckpoint: racer.distanceFromCheckpoint,
@@ -81,24 +97,54 @@ async function gameLoop() {
 					finished: racer.finished,
 					trackOffset: racer.trackOffset,
 					targetTrackOffset: racer.targetTrackOffset ?? 0,
-					lastOffsetChangeAt: racer.lastOffsetChangeAt
+					lastOffsetChangeAt: racer.lastOffsetChangeAt,
+					lapStartTime: racer.lapStartTime,
+					lapTimes: racer.lapTimes,
+					bestLapTime: racer.bestLapTime
 				});
 			})
 		);
 
-		//check if any racer has finished
-		if (racers.some((r) => r.finished) && race.status !== 'finished') {
-			const winningRacer = racers.find((r) => r.finished);
-
+		//set status to finished and clear interval if all racers have finished
+		if (racers.every((r) => r.finished)) {
 			await updateRace(race.id || '0', {
-				status: 'finished',
-				winner: winningRacer?.id
+				status: 'finished'
 			});
-			console.log(`🏁 Race "${race.name}" finished. Winner: ${winningRacer?.name}`);
 			clearInterval(glInterval);
 		}
-		// console.timeEnd('update racers');
+
+		// console.timeEnd('gameloop');
 	}, SIM_INTERVAL);
+}
+
+export function startLapTimer(racer: Racer | undefined = undefined) {
+	//if no specific racer specified, start lap for all racers
+	if (!racer) {
+		for (const racer of racers) {
+			//init lap timer
+			if (!racer.lapStartTime) {
+				racer.lapStartTime = Date.now() / 1000;
+			}
+		}
+	} else {
+		if (!racer.lapStartTime) {
+			racer.lapStartTime = Date.now() / 1000;
+		}
+	}
+}
+
+export function recordLapTime(racer: Racer, lapNumber: number) {
+	if (!racer.lapStartTime) {
+		return;
+	}
+	const lapTime = Number((Date.now() / 1000 - racer.lapStartTime).toFixed(3));
+
+	racer.lapTimes[lapNumber] = lapTime;
+	racer.bestLapTime =
+		racer.bestLapTime !== undefined && racer.bestLapTime !== 0
+			? Math.min(racer.bestLapTime, lapTime)
+			: lapTime;
+	racer.lapStartTime = undefined;
 }
 
 function resolveOvertaking(racers: Racer[], now: number) {
@@ -192,7 +238,8 @@ export async function createDefaultRacers(race: Race) {
 			raceId: race.id,
 			checkpointIndex: 0,
 			distanceFromCheckpoint: 0,
-			lastUpdatedAt: new Date().toISOString()
+			lastUpdatedAt: new Date().toISOString(),
+			lapTimes: {}
 		};
 
 		await pb.collection('racers').create(newRacer);
@@ -281,7 +328,7 @@ function getSpriteSheetLocation(pokemonId: number, pokemonName: string) {
 		(pokemonId.toString().length < 3
 			? '0'.repeat(pokemonId.toString().length - 1)
 			: pokemonId.toString()) +
-		'.png';
+		'_0.png';
 	return spriteLoc;
 }
 
