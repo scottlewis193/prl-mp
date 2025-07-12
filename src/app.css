@@ -1,8 +1,13 @@
 @import 'tailwindcss';
-@plugin 'daisyui';
+@plugin 'daisyui' {
+	themes: all;
+}
 
 * {
 	box-sizing: border-box;
+	font:
+		16px 'Inter',
+		sans-serif;
 }
 
 body,

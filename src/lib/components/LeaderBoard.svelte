@@ -3,9 +3,10 @@
 	import { getRacersContext, type Racer, type SortedRacer } from '$lib/stores/racer.svelte';
 	import { onMount } from 'svelte';
 	import { flip } from 'svelte/animate';
-	import { slide } from 'svelte/transition';
 
-	const racers = getRacersContext();
+	const MAX_RACERS = 20;
+
+	let racers = getRacersContext();
 	const race = getRaceContext();
 	const checkpoints: Record<string, { x: number; y: number }> = $derived(
 		race.racetrack.checkpoints
@@ -98,18 +99,18 @@
 			} else {
 				sortedRacers = sortRacers();
 			}
-			if (race.status === 'finished') clearInterval(sortInterval);
+			// if (race.status === 'finished') clearInterval(sortInterval);
 		}, 1000);
 	});
 </script>
 
-{#if sortedRacers}
+{#if sortedRacers.length > 0}
 	<div
 		id="leaderboard-container"
-		class="bg-base-200 absolute top-[64px] left-0 h-full w-[300px] pt-20 pr-2 pl-2"
+		class="absolute top-2 left-2 z-[1000] h-full w-[300px] select-none"
 	>
 		<div id="leaderboard" class="">
-			<ul class="list bg-base-100 rounded-box shadow-md">
+			<ul class="list bg-base-200 rounded-box shadow-md">
 				<li class="p-4 pb-2 text-xs tracking-wide opacity-60">
 					Lap {sortedRacers[0]?.lapsCompleted + 1} / {race?.totalLaps}
 				</li>

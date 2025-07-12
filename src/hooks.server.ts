@@ -1,12 +1,11 @@
 import { building, dev } from '$app/environment';
 import PocketBase from 'pocketbase';
-import { startUp } from '$lib/server/gameLoop';
+import { startUp } from '$lib/server/serverTick';
 import type { Handle, ServerInit } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
-import pb from '$lib/pocketbase';
 
 export const init: ServerInit = async () => {
-	// startUp();
+	startUp();
 };
 
 export const handle = async ({ event, resolve }) => {

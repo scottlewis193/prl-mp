@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { getCameraContext } from '$lib/stores/camera.svelte';
+	import { getRaceContext } from '$lib/stores/race.svelte';
 	import type { Racer } from '$lib/stores/racer.svelte';
 	import { onMount, onDestroy } from 'svelte';
 
 	const camera = getCameraContext();
+	const race = getRaceContext();
 
 	const {
 		x = 0,
@@ -63,8 +65,10 @@
 
 	onMount(() => {
 		interval = setInterval(() => {
-			frame = (frame + 1) % totalFrames;
-			frameX = frame % columns;
+			if (race.status == 'running') {
+				frame = (frame + 1) % totalFrames;
+				frameX = frame % columns;
+			}
 		}, frameRate);
 	});
 

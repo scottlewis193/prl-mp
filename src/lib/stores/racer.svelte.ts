@@ -1,5 +1,6 @@
 import pb from '../pocketbase';
-import { type Race } from './race.svelte';
+import PocketBase from 'pocketbase';
+
 import { getContext, setContext } from 'svelte';
 
 export interface Racer {
@@ -25,9 +26,9 @@ export type SortedRacer = Racer & { progress: number; totalProgress: number; has
 
 const racersKey = Symbol('racers');
 
-export function setRacersContext() {
-	const racers = $state([]);
-	return setContext<Racer[]>(racersKey, racers);
+export function setRacersContext(racers: Racer[] = []) {
+	const _racers = $state(racers);
+	return setContext<Racer[]>(racersKey, _racers);
 }
 
 export function getRacersContext(): Racer[] {
@@ -35,22 +36,42 @@ export function getRacersContext(): Racer[] {
 }
 
 export async function deleteAllRacers() {
-	const racers = await pb.collection('racers').getFullList();
-	for (let racer of racers) {
+	console.log(pb.authStore.isValid);
+	const racersToDelete = await pb.collection('racers').getFullList();
+
+	for (let racer of racersToDelete) {
 		await pb.collection('racers').delete(racer.id);
 	}
 }
 
+export async function getAllRacers() {
+	return (await pb.collection('racers').getFullList()) as Racer[];
+}
+
 export async function getRacers(raceId: string) {
-	const racers = (await pb.collection('racers').getFullList({
+	return (await pb.collection('racers').getFullList({
 		filter: `raceId.id = "${raceId}"`,
 		expand: 'raceId.id'
 	})) as Racer[];
-	return racers;
 }
 
 export async function updateRacer(racerId: string, updates: Partial<Racer>) {
-	await pb.collection('racers').update(racerId, updates);
+	try {
+		await pb.collection('racers').update(racerId, updates);
+	} catch (error) {
+		console.log('Error updating racer:', racerId);
+	}
+}
+
+export async function updateRacersByRaceId(raceId: string, updates: Partial<Racer>) {
+	const racers = await getRacers(raceId);
+
+	await Promise.all(
+		racers.map((racer) => {
+			racer = { ...racer, ...updates };
+			return updateRacer(racer.id, racer);
+		})
+	);
 }
 
 export interface Pokemon {
@@ -63,4 +84,29 @@ export interface Pokemon {
 	attack: number;
 	defense: number;
 	speed: number;
+}
+
+export async function subscribeToRacers(racersAry: Racer[], pb: PocketBase) {
+	await pb.collection('racers').subscribe('*', async function (e) {
+		const racerRecord = e.record as unknown as Racer;
+		switch (e.action) {
+			case 'create':
+				racersAry.push(racerRecord);
+				break;
+			case 'update':
+				const index = racersAry.findIndex((r) => r.id === racerRecord.id);
+				if (index !== -1) {
+					racersAry[index] = racerRecord;
+				} else {
+					racersAry.push(racerRecord);
+				}
+				break;
+			case 'delete':
+				racersAry.splice(
+					racersAry.findIndex((r) => r.id === racerRecord.id),
+					1
+				);
+				break;
+		}
+	});
 }

@@ -1,12 +1,13 @@
 <script lang="ts">
-	import pb from '$lib/pocketbase';
 	import { getFirstRace, getRace, getRaceContext, type Race } from '$lib/stores/race.svelte';
 	import { getRacersContext, type Racer } from '$lib/stores/racer.svelte';
 	import { onMount } from 'svelte';
 	import RacerSprite from './RacerSprite.svelte';
 	import LeaderBoard from './LeaderBoard.svelte';
-	import { getCameraTransform, setCameraContext, type Camera } from '$lib/stores/camera.svelte';
+	import { setCameraContext, type Camera } from '$lib/stores/camera.svelte';
 	import CameraWrapper from './CameraWrapper.svelte';
+	import PocketBase from 'pocketbase';
+	import TrackRenderer from './TrackRenderer.svelte';
 
 	const race: Race = getRaceContext();
 	const racers: Racer[] = getRacersContext();
@@ -19,8 +20,6 @@
 	let windowWidth = $state(0);
 	let windowHeight = $state(0);
 	let isDragging = $state(false);
-
-	$inspect(camera.targetRacerId);
 
 	function getInterpolatedPosition(racer: Racer) {
 		if (!race) return { x: 0, y: 0 };
@@ -83,6 +82,8 @@
 		windowWidth = window.innerWidth + 300;
 		windowHeight = window.innerHeight + 64;
 		scale = Math.min(windowWidth / 1280, windowHeight / 720);
+		const trackEl = document.getElementById('track-container');
+		if (!trackEl) return;
 		trackEl.style.transform = `scale(${scale})`;
 	}
 
@@ -133,10 +134,15 @@
 		updateScale();
 		window.addEventListener('resize', updateScale);
 
+		const pb = new PocketBase('http://localhost:8090');
+		pb.authStore.loadFromCookie(document.cookie);
+
 		await pb.collection('racers').subscribe('*', async function (e) {
 			if (e.action === 'update') {
 				const racerRecord = e.record as unknown as Racer;
-				updateRacerOnScreen(racerRecord);
+				if (racerRecord.raceId == race.id) {
+					updateRacerOnScreen(racerRecord);
+				}
 			}
 		});
 	});
@@ -154,6 +160,7 @@
 	<LeaderBoard />
 	<CameraWrapper>
 		<div
+			id="track-container"
 			class="track-container"
 			bind:this={trackEl}
 			style="
@@ -187,61 +194,12 @@
 				{/key}
 			{/each}
 
-			<svg
-				class="track-svg"
-				viewBox="0 0 {race.racetrack.maxSize.x} {race.racetrack.maxSize.y}"
-				xmlns="http://www.w3.org/2000/svg"
-				preserveAspectRatio="xMidYMid meet"
-				style="
-					top: 0;
-					left: 0;
-					width: {race.racetrack.maxSize.x}px;
-					height: {race.racetrack.maxSize.y}px;
-					position: absolute;
-					pointer-events: none;
-					z-index: 1;
-				"
-			>
-				<!-- Optional: draw lines between checkpoints -->
-
-				{#each Object.values(checkpoints) as point, i}
-					{#if i < Object.values(checkpoints).length - 1}
-						<line
-							x1={point.x}
-							y1={point.y}
-							x2={checkpoints[i + 1].x}
-							y2={checkpoints[i + 1].y}
-							stroke="white"
-							stroke-width={race?.racetrack.width}
-							stroke-linecap="round"
-						/>
-					{/if}
-				{/each}
-
-				<!-- Optional: close the loop visually -->
-				<line
-					x1={checkpoints[Object.values(checkpoints).length - 1].x}
-					y1={checkpoints[Object.values(checkpoints).length - 1].y}
-					x2={checkpoints[0].x}
-					y2={checkpoints[0].y}
-					stroke="white"
-					stroke-width={race?.racetrack.width}
-					stroke-linecap="round"
-				/>
-
-				<!-- Draw checkpoints as circles -->
-				<!-- {#each checkpoints as { x, y }, i}
-					<circle cx={x} cy={y} r="8" fill="black" stroke="white" stroke-width="2" />
-					<text x={x + 10} y={y + 5} font-size="14" fill="white">
-						{i + 1}
-					</text>
-				{/each} -->
-			</svg>
+			<TrackRenderer racetrack={race.racetrack} />
 		</div>
 	</CameraWrapper>
 	<div
 		id="camera-controls"
-		class="absolute bottom-0 left-[300px] z-100 flex h-[64px] w-[calc(100%-300px)] items-center justify-center gap-3 p-4 text-white"
+		class="absolute bottom-0 left-0 z-100 flex h-[64px] w-full items-center justify-center gap-3 p-4 text-white"
 	>
 		<button class="btn btn-neutral" onclick={() => (camera.mode = 'free')}>Free Camera</button>
 		<button

@@ -1,9 +1,9 @@
 import pb from '../pocketbase';
+import PocketBase from 'pocketbase';
 
 import { v4 as uuid } from 'uuid';
 import { defaultRaceTrack, type RaceTrack } from '../racetrack';
 import { getContext, setContext } from 'svelte';
-import type { SortedRacer } from './racer.svelte';
 
 export interface Race {
 	id?: string;
@@ -18,7 +18,7 @@ export interface Race {
 
 export const defaultRace: Race = {
 	name: `Race ${uuid().slice(0, 5)}`,
-	status: 'running',
+	status: 'pending',
 	startTime: new Date(Date.now()).toISOString(),
 	totalLaps: 3,
 	racetrack: defaultRaceTrack,
@@ -28,9 +28,11 @@ export const defaultRace: Race = {
 
 const raceKey = Symbol('race');
 
-export function setRaceContext() {
-	const race = $state(defaultRace);
-	return setContext<Race>(raceKey, race);
+export function setRaceContext(race: Race | undefined = undefined) {
+	let _race = $state(defaultRace);
+	if (race) _race = race;
+
+	return setContext<Race>(raceKey, _race);
 }
 
 export function getRaceContext(): Race {
@@ -59,13 +61,50 @@ export async function getRunningRaces() {
 	})) as Race[];
 }
 
+export async function getAllRaces() {
+	return (await pb.collection('races').getFullList()) as Race[];
+}
+
 export async function deleteAllRaces() {
 	const races = await pb.collection('races').getFullList();
 	for (let race of races) {
-		await pb.collection('races').delete(race.id);
+		try {
+			await pb.collection('races').delete(race.id);
+		} catch (error) {
+			console.log('nothing to delete');
+		}
 	}
 }
 
 export async function updateRace(id: string, updates: Partial<Race>) {
-	await pb.collection('races').update(id, updates);
+	try {
+		await pb.collection('races').update(id, updates);
+	} catch (error) {
+		console.log('error updating race:', id);
+	}
+}
+
+export async function subscribeToRaces(racesAry: Race[], pb: PocketBase) {
+	await pb.collection('races').subscribe('*', async function (e) {
+		const raceRecord = e.record as unknown as Race;
+		switch (e.action) {
+			case 'create':
+				racesAry.push(raceRecord);
+				break;
+			case 'update':
+				const index = racesAry.findIndex((r) => r.id === raceRecord.id);
+				if (index !== -1) {
+					racesAry[index] = raceRecord;
+				} else {
+					racesAry.push(raceRecord);
+				}
+				break;
+			case 'delete':
+				racesAry.splice(
+					racesAry.findIndex((r) => r.id === raceRecord.id),
+					1
+				);
+				break;
+		}
+	});
 }

@@ -1,3 +1,5 @@
+import type { AuthModel } from 'pocketbase';
+
 export interface User {
 	id: string;
 	name: string;

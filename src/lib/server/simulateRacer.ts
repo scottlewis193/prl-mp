@@ -1,6 +1,6 @@
 import type { Race } from '$lib/stores/race.svelte';
 import type { Racer } from '$lib/stores/racer.svelte';
-import { recordLapTime, startLapTimer } from './gameLoop';
+import { recordLapTime, startLapTimer } from './serverFunctions';
 
 const collisionThreshold = 64; // collision radius
 
@@ -41,7 +41,7 @@ export function simulateRacer(racer: Racer, race: Race, now = Date.now(), totalL
 			lapsCompleted++;
 			racer.speed = Math.floor(Math.random() * 100);
 			recordLapTime(racer, lapsCompleted);
-			startLapTimer(racer);
+			startLapTimer([racer]);
 			if (lapsCompleted >= totalLaps) {
 				return {
 					checkpointIndex: 0,
@@ -63,21 +63,21 @@ export function simulateRacer(racer: Racer, race: Race, now = Date.now(), totalL
 	};
 }
 
-function checkCollisions(positions: { x: number; y: number; id: string }[]) {
-	const collisions: [string, string][] = [];
+// function checkCollisions(positions: { x: number; y: number; id: string }[]) {
+// 	const collisions: [string, string][] = [];
 
-	for (let i = 0; i < positions.length; i++) {
-		for (let j = i + 1; j < positions.length; j++) {
-			const a = positions[i];
-			const b = positions[j];
+// 	for (let i = 0; i < positions.length; i++) {
+// 		for (let j = i + 1; j < positions.length; j++) {
+// 			const a = positions[i];
+// 			const b = positions[j];
 
-			const dist = Math.hypot(b.x - a.x, b.y - a.y);
+// 			const dist = Math.hypot(b.x - a.x, b.y - a.y);
 
-			if (dist < collisionThreshold) {
-				collisions.push([a.id, b.id]);
-			}
-		}
-	}
+// 			if (dist < collisionThreshold) {
+// 				collisions.push([a.id, b.id]);
+// 			}
+// 		}
+// 	}
 
-	return collisions;
-}
+// 	return collisions;
+// }
