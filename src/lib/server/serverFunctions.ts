@@ -1,4 +1,4 @@
-import { defaultRace, type Race } from '$lib/stores/race.svelte';
+import { Race } from '$lib/stores/race.svelte';
 import type { Racer } from '$lib/stores/racer.svelte';
 import { createRandomPokemon } from './pokemon';
 import pb from '../pocketbase';
@@ -6,24 +6,24 @@ import pb from '../pocketbase';
 export function startLapTimer(racers: Racer[]) {
 	for (const racer of racers) {
 		//init lap timer
-		if (!racer.lapStartTime) {
-			racer.lapStartTime = Date.now() / 1000;
+		if (!racer.currentRace.lapStartTime) {
+			racer.currentRace.lapStartTime = Date.now() / 1000;
 		}
 	}
 }
 
 export function recordLapTime(racer: Racer, lapNumber: number) {
-	if (!racer.lapStartTime) {
+	if (!racer.currentRace.lapStartTime) {
 		return;
 	}
-	const lapTime = Number((Date.now() / 1000 - racer.lapStartTime).toFixed(3));
+	const lapTime = Number((Date.now() / 1000 - racer.currentRace.lapStartTime).toFixed(3));
 
-	racer.lapTimes[lapNumber] = lapTime;
-	racer.bestLapTime =
-		racer.bestLapTime !== undefined && racer.bestLapTime !== 0
-			? Math.min(racer.bestLapTime, lapTime)
+	racer.currentRace.lapTimes[lapNumber] = lapTime;
+	racer.currentRace.bestLapTime =
+		racer.currentRace.bestLapTime !== undefined && racer.currentRace.bestLapTime !== 0
+			? Math.min(racer.currentRace.bestLapTime, lapTime)
 			: lapTime;
-	racer.lapStartTime = undefined;
+	racer.currentRace.lapStartTime = undefined;
 }
 
 export function resolveOvertaking(racers: Racer[], now: number, race: Race) {
@@ -36,9 +36,9 @@ export function resolveOvertaking(racers: Racer[], now: number, race: Race) {
 	// Sort racers by progress
 	const sorted = [...racers].sort(
 		(a, b) =>
-			b.lapsCompleted - a.lapsCompleted ||
-			b.checkpointIndex - a.checkpointIndex ||
-			b.distanceFromCheckpoint - a.distanceFromCheckpoint
+			b.currentRace.lapsCompleted - a.currentRace.lapsCompleted ||
+			b.currentRace.checkpointIndex - a.currentRace.checkpointIndex ||
+			b.currentRace.distanceFromCheckpoint - a.currentRace.distanceFromCheckpoint
 	);
 
 	// Track lane usage per segment
@@ -56,26 +56,31 @@ export function resolveOvertaking(racers: Racer[], now: number, race: Race) {
 		const racer = sorted[i];
 
 		const nextCheckpoint =
-			(racer.checkpointIndex + 1) % Object.values(race.racetrack.checkpoints).length;
-		const segmentKey = `${racer.lapsCompleted}-${racer.checkpointIndex}-${nextCheckpoint}`;
+			(racer.currentRace.checkpointIndex + 1) % Object.values(race.racetrack.checkpoints).length;
+		const segmentKey = `${racer.currentRace.lapsCompleted}-${racer.currentRace.checkpointIndex}-${nextCheckpoint}`;
 		const occupiedLanes = getOccupiedLanes(segmentKey);
 
 		// If cooldown expired or never set, try to assign a lane
-		if (!racer.lastOffsetChangeAt || now - racer.lastOffsetChangeAt > cooldown) {
+		if (
+			!racer.positioning.lastOffsetChangeAt ||
+			now - racer.positioning.lastOffsetChangeAt > cooldown
+		) {
 			// If already close to another racer, find a clear lane
 			let laneFound = false;
 
 			for (let j = 0; j < i; j++) {
 				const ahead = sorted[j];
-				if (ahead.checkpointIndex !== racer.checkpointIndex) continue;
+				if (ahead.currentRace.checkpointIndex !== racer.currentRace.checkpointIndex) continue;
 
-				const gap = Math.abs(ahead.distanceFromCheckpoint - racer.distanceFromCheckpoint);
+				const gap = Math.abs(
+					ahead.currentRace.distanceFromCheckpoint - racer.currentRace.distanceFromCheckpoint
+				);
 				if (gap < 60) {
 					// Racer is close to someone ahead — try to dodge
 					for (const lane of possibleLanes) {
 						if (!occupiedLanes.has(lane)) {
-							racer.targetTrackOffset = lane;
-							racer.lastOffsetChangeAt = now;
+							racer.positioning.targetTrackOffset = lane;
+							racer.positioning.lastOffsetChangeAt = now;
 							occupiedLanes.add(lane);
 							laneFound = true;
 							break;
@@ -88,13 +93,13 @@ export function resolveOvertaking(racers: Racer[], now: number, race: Race) {
 			if (!laneFound) {
 				// Not near anyone — try to stay or return to center
 				if (!occupiedLanes.has(0)) {
-					racer.targetTrackOffset = 0;
+					racer.positioning.targetTrackOffset = 0;
 					occupiedLanes.add(0);
 				} else {
 					// Center lane blocked, pick any free
 					for (const lane of possibleLanes) {
 						if (!occupiedLanes.has(lane)) {
-							racer.targetTrackOffset = lane;
+							racer.positioning.targetTrackOffset = lane;
 							occupiedLanes.add(lane);
 							break;
 						}
@@ -103,7 +108,7 @@ export function resolveOvertaking(racers: Racer[], now: number, race: Race) {
 			}
 		} else {
 			// Lane is locked by cooldown — re-reserve it
-			occupiedLanes.add(racer.targetTrackOffset ?? 0);
+			occupiedLanes.add(racer.positioning.targetTrackOffset ?? 0);
 		}
 	}
 }
@@ -114,11 +119,7 @@ export async function createDefaultRacers(race: Race) {
 		const newRacer: Partial<Racer> = {
 			pokemon: newPokemon,
 			name: newPokemon.name,
-			raceId: race.id,
-			checkpointIndex: 0,
-			distanceFromCheckpoint: 0,
-			lastUpdatedAt: new Date().toISOString(),
-			lapTimes: {}
+			race: race.id
 		};
 
 		await pb.collection('racers').create(newRacer);
@@ -126,7 +127,9 @@ export async function createDefaultRacers(race: Race) {
 }
 
 export async function createRace() {
-	const race = (await pb.collection('races').create(defaultRace)) as Race;
+	const race = (await pb
+		.collection('races')
+		.create(JSON.parse(JSON.stringify(new Race())))) as Race;
 	await createDefaultRacers(race);
 	return race;
 }

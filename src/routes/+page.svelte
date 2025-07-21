@@ -6,21 +6,14 @@
 	const user = data?.user;
 </script>
 
-<div class="bg-base-200 flex h-[64px] flex-col items-start justify-center pl-2 text-white">
-	<div class="avatar avatar-placeholder">
-		<div class="bg-neutral text-neutral-content w-12 rounded-full">
-			<span>{user?.name.charAt(0).toUpperCase()}</span>
+<div id="stats-container" class="flex h-auto w-full flex-col gap-6 p-6">
+	<div class="card card-border bg-base-200 w-96">
+		<div class="stats shadow">
+			<div class="stat">
+				<div class="stat-title">Money</div>
+				<div class="stat-value">₽89,400</div>
+				<div class="stat-desc"></div>
+			</div>
 		</div>
-	</div>
-</div>
-
-<div id="menu-container" class="flex h-full w-full flex-col items-center justify-center">
-	<div id="logo-container" class="flex w-80 flex-col gap-2">
-		<img src="/logo.png" alt="Logo" class="h-auto w-full" />
-	</div>
-	<div id="button-container" class="flex w-80 flex-col gap-2">
-		<button class="btn w-full" onclick={() => goto('/races')}>Races</button>
-		<button class="btn w-full" onclick={() => goto('/exchange')}>The Exchange</button>
-		<button class="btn w-full">Exit</button>
 	</div>
 </div>

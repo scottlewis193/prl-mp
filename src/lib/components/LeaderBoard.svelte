@@ -1,14 +1,16 @@
 <script lang="ts">
-	import { getRaceContext } from '$lib/stores/race.svelte';
-	import { getRacersContext, type Racer, type SortedRacer } from '$lib/stores/racer.svelte';
+	import { getCameraContext } from '$lib/stores/camera.svelte';
+	import { getCurrentRaceContext } from '$lib/stores/race.svelte';
+	import { getCurrentRacersContext, type Racer, type SortedRacer } from '$lib/stores/racer.svelte';
 	import { onMount } from 'svelte';
 	import { flip } from 'svelte/animate';
 
 	const MAX_RACERS = 20;
 
-	let racers = getRacersContext();
-	const race = getRaceContext();
-	const checkpoints: Record<string, { x: number; y: number }> = $derived(
+	let racers = getCurrentRacersContext();
+	let camera = getCameraContext();
+	const race = getCurrentRaceContext();
+	const checkpoints: { index: number; x: number; y: number }[] = $derived(
 		race.racetrack.checkpoints
 	);
 
@@ -25,9 +27,9 @@
 		const speedB = racerB.pokemon.speed + 50;
 
 		const progressA =
-			racerA.lapsCompleted * race.racetrack.totalLength + getDistanceAlongTrack(racerA);
+			racerA.currentRace.lapsCompleted * race.racetrack.totalLength + getDistanceAlongTrack(racerA);
 		const progressB =
-			racerB.lapsCompleted * race.racetrack.totalLength + getDistanceAlongTrack(racerB);
+			racerB.currentRace.lapsCompleted * race.racetrack.totalLength + getDistanceAlongTrack(racerB);
 
 		const deltaDistance = progressB - progressA;
 
@@ -40,18 +42,19 @@
 	}
 
 	function getDistanceAlongTrack(racer: Racer) {
-		const current = checkpoints[racer.checkpointIndex];
-		const next = checkpoints[(racer.checkpointIndex + 1) % Object.values(checkpoints).length];
+		const current = checkpoints[racer.currentRace.checkpointIndex];
+		const next =
+			checkpoints[(racer.currentRace.checkpointIndex + 1) % Object.values(checkpoints).length];
 		const segmentLength = Math.hypot(next.x - current.x, next.y - current.y);
 
 		return (
 			Object.values(checkpoints)
-				.slice(0, racer.checkpointIndex)
+				.slice(0, racer.currentRace.checkpointIndex)
 				.reduce((sum, _, i) => {
 					const a = checkpoints[i];
 					const b = checkpoints[(i + 1) % Object.values(checkpoints).length];
 					return sum + Math.hypot(b.x - a.x, b.y - a.y);
-				}, 0) + Math.min(racer.distanceFromCheckpoint, segmentLength)
+				}, 0) + Math.min(racer.currentRace.distanceFromCheckpoint, segmentLength)
 		);
 	}
 
@@ -59,26 +62,28 @@
 		const _sortedRacers = [...racers]
 			.map((racer) => {
 				let distance = 0;
-				for (let i = 0; i < racer.checkpointIndex; i++) {
+				for (let i = 0; i < racer.currentRace.checkpointIndex; i++) {
 					const a = checkpoints[i];
 					const b = checkpoints[i + 1] || a;
 					distance += Math.hypot(b.x - a.x, b.y - a.y);
 				}
-				const a = checkpoints[racer.checkpointIndex];
-				const b = checkpoints[racer.checkpointIndex + 1] || a;
+				const a = checkpoints[racer.currentRace.checkpointIndex];
+				const b = checkpoints[racer.currentRace.checkpointIndex + 1] || a;
 				const segmentLength = Math.hypot(b.x - a.x, b.y - a.y);
-				const t = racer.distanceFromCheckpoint / segmentLength;
+				const t = racer.currentRace.distanceFromCheckpoint / segmentLength;
 				distance += segmentLength * t;
 
 				return {
 					...racer,
 					progress: distance,
-					totalProgress: racer.lapsCompleted * totalTrackLength + distance,
+					totalProgress: racer.currentRace.lapsCompleted * totalTrackLength + distance,
 					hasBestLap:
-						racer.bestLapTime ===
+						racer.currentRace.bestLapTime ===
 						Math.min(
 							...racers.map((r) => {
-								return r.bestLapTime === 0 || !r.bestLapTime ? Infinity : r.bestLapTime;
+								return r.currentRace.bestLapTime === 0 || !r.currentRace.bestLapTime
+									? Infinity
+									: r.currentRace.bestLapTime;
 							})
 						)
 				};
@@ -90,16 +95,12 @@
 	let sortInterval: NodeJS.Timeout;
 	let sortDelayFinished: boolean = false;
 	let sortedRacers: SortedRacer[] = $state([]);
+	let mode: 'Interval' | 'Leader' = $state('Interval');
 
 	onMount(() => {
 		//sort racers in 1 second intervals
 		const sortInterval = setInterval(() => {
-			if (!sortDelayFinished && racers.length !== 0) {
-				sortDelayFinished = true;
-			} else {
-				sortedRacers = sortRacers();
-			}
-			// if (race.status === 'finished') clearInterval(sortInterval);
+			sortedRacers = sortRacers();
 		}, 1000);
 	});
 </script>
@@ -107,16 +108,44 @@
 {#if sortedRacers.length > 0}
 	<div
 		id="leaderboard-container"
-		class="absolute top-2 left-2 z-[1000] h-full w-[300px] select-none"
+		class="absolute top-2 left-2 z-[1000] flex h-full flex-col gap-2 select-none"
 	>
-		<div id="leaderboard" class="">
+		<button
+			class="btn btn-primary w-15"
+			onclick={(e) => {
+				e.currentTarget?.parentElement?.children[1].classList.toggle('hidden');
+			}}
+		>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="h-5 w-5"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+			>
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="2"
+					d="M4 6h16M4 12h8m-8 6h16"
+				/>
+			</svg>
+		</button>
+		<div id="leaderboard" class="hidden w-[300px]">
 			<ul class="list bg-base-200 rounded-box shadow-md">
 				<li class="p-4 pb-2 text-xs tracking-wide opacity-60">
-					Lap {sortedRacers[0]?.lapsCompleted + 1} / {race?.totalLaps}
+					Lap {sortedRacers[0]?.currentRace.lapsCompleted + 1} / {race?.totalLaps}
 				</li>
 
 				{#each sortedRacers as racer (racer.id)}
-					<li class="" animate:flip={{ delay: 200 }}>
+					<li
+						class="cursor-pointer"
+						onclick={() => {
+							camera.mode = 'follow';
+							camera.targetRacerId = racer.id;
+						}}
+						animate:flip={{ delay: 200 }}
+					>
 						<div
 							class="list-row racer-entry grid-cols-[0.5fr_0.5fr_0.7fr_1.2fr_0.5fr] p-1 pr-3 pl-3"
 						>
@@ -136,15 +165,17 @@
 							{#if sortedRacers.indexOf(racer) !== 0}
 								<div class="flex h-full items-center justify-start">
 									+{Math.abs(
-										estimateTimeBehind(sortedRacers[sortedRacers.indexOf(racer) - 1], racer)
+										mode == 'Interval'
+											? estimateTimeBehind(sortedRacers[sortedRacers.indexOf(racer) - 1], racer)
+											: estimateTimeBehind(sortedRacers[0], racer)
 									).toFixed(3)}
 								</div>
 							{:else}
-								<div class="flex h-full items-center justify-start">Interval</div>
+								<div class="flex h-full items-center justify-start">{mode}</div>
 							{/if}
 
 							<div class="flex h-full items-center justify-center">
-								{#if racer.finished}
+								{#if racer.currentRace.finished}
 									<svg
 										width="25"
 										height="25"
@@ -192,6 +223,18 @@
 						</div>
 					</li>
 				{/each}
+				<div class="flex items-center justify-center gap-2 p-2">
+					Interval
+					<input
+						type="checkbox"
+						class="toggle toggle-xs mt-[0.5px]"
+						onchange={(event) => {
+							const target = event.target as HTMLInputElement;
+							mode = target.checked ? 'Leader' : 'Interval';
+						}}
+					/>
+					Leader
+				</div>
 			</ul>
 		</div>
 	</div>

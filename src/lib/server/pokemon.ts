@@ -1,90 +1,114 @@
-import type { Pokemon } from '$lib/stores/racer.svelte';
+import { Pokemon } from '$lib/stores/racer.svelte';
 import { existsSync } from 'fs';
+import { JSDOM } from 'jsdom';
 
-export async function createRandomPokemon(): Promise<Pokemon> {
-	let pokemonId: number = -1;
-	let pokemonObj: { id: number; name: string; url: string };
-	let mugshot: string;
-	let spriteSheet: string;
-	let randPokemon: Pokemon | undefined;
-	let validPokemon: boolean = false;
-
-	while (!validPokemon) {
-		pokemonId = Math.floor(Math.random() * pokemon.length);
-
-		const foundPokemon = pokemon.find((p) => p.id === pokemonId);
-		if (!foundPokemon) continue;
-		pokemonObj = { ...foundPokemon };
-
-		if (!pokemonObj) continue;
-		mugshot = getMugshotLocation(pokemonId, pokemonObj.name);
-		if (!existsSync('./static' + mugshot)) {
-			//try alternative image
-			mugshot = getMugshotLocation(pokemonId, pokemonObj.name, true);
-			console.log('alt img');
-			if (!existsSync('./static' + mugshot)) {
-				continue;
-			}
-		}
-		spriteSheet = getSpriteSheetLocation(pokemonId, pokemonObj.name);
-		if (!existsSync('./static' + spriteSheet)) {
-			continue;
-		}
-
-		console.log('Creating random pokemon:', pokemonObj.name);
-
-		//get stats and normalise them
-		const stats = await getPokemonStats(pokemonObj.name);
-		if (!stats) {
-			continue;
-		}
-		const normalisedStats = normaliseStats(stats);
-
-		randPokemon = {
-			id: pokemonId,
-			name: pokemonObj.name,
-			mugshot: mugshot,
-			spriteSheet: spriteSheet,
-			types: [],
-			hp: normalisedStats.hp,
-			attack: normalisedStats.attack,
-			defense: normalisedStats.defense,
-			speed: normalisedStats.speed
-		};
-
-		validPokemon = true;
-
-		const index = pokemon.indexOf(pokemonObj);
-		pokemon.splice(index, index + 1);
+class DOMParser {
+	parseFromString(s: string, contentType = 'text/html') {
+		return new JSDOM(s, { contentType }).window.document;
 	}
-
-	if (!randPokemon) throw new Error('Failed to create random pokemon');
-
-	return randPokemon;
 }
 
-function getMugshotLocation(pokemonId: number, pokemonName: string, altImg: boolean = false) {
-	const nameCaptialized = pokemonName.charAt(0).toUpperCase() + pokemonName.slice(1);
-	const mugshotLoc =
-		'/mugshots/(' +
-		(pokemonId.toString().length < 3
-			? '0'.repeat(pokemonId.toString().length - 1)
-			: pokemonId.toString()) +
-		') ' +
-		nameCaptialized +
-		'/' +
-		(altImg ? 'Normal.png' : 'Happy.png');
-	return mugshotLoc;
+// export async function createRandomPokemon(): Promise<Pokemon> {
+// 	let pokemonId: number = -1;
+// 	let pokemonObj: { id: number; name: string; url: string };
+// 	let mugshot: string | undefined;
+// 	let spriteSheet: string | undefined;
+// 	let animData: any;
+// 	let randPokemon: Pokemon | undefined;
+// 	let validPokemon: boolean = false;
+
+// 	while (!validPokemon) {
+// 		pokemonId = Math.floor(Math.random() * pokemon.length);
+
+// 		const foundPokemon = pokemon.find((p) => p.id === pokemonId);
+// 		if (!foundPokemon) continue;
+// 		pokemonObj = { ...foundPokemon };
+
+// 		if (!pokemonObj) continue;
+// 		mugshot = await getMugshot(pokemonId);
+// 		if (!mugshot) continue;
+
+// 		spriteSheet = await getSpriteSheet(pokemonId);
+// 		if (!spriteSheet) continue;
+
+// 		animData = await getAnimData(pokemonId);
+// 		if (!animData) continue;
+
+// 		console.log('Creating random pokemon:', pokemonId);
+
+// 		//get stats and normalise them
+// 		const stats = await getPokemonStats(pokemonObj.name);
+// 		if (!stats) {
+// 			continue;
+// 		}
+// 		const normalisedStats = normaliseStats(stats);
+// 		randPokemon = new Pokemon();
+// 		randPokemon.id = pokemonId;
+// 		randPokemon.name = pokemonObj.name;
+// 		randPokemon.mugshot = mugshot;
+// 		randPokemon.spriteSheet = spriteSheet;
+// 		randPokemon.animData = animData;
+// 		randPokemon.types = [];
+// 		randPokemon.hp = normalisedStats.hp;
+// 		randPokemon.attack = normalisedStats.attack;
+// 		randPokemon.defense = normalisedStats.defense;
+// 		randPokemon.speed = normalisedStats.speed;
+
+// 		validPokemon = true;
+
+// 		const index = pokemon.indexOf(pokemonObj);
+// 		pokemon.splice(index, index + 1);
+// 	}
+
+// 	if (!randPokemon) throw new Error('Failed to create random pokemon');
+
+// 	return randPokemon;
+// }
+
+export async function getAnimData(pokemonId: number) {
+	const baseURL =
+		'https://raw.githubusercontent.com/PMDCollab/SpriteCollab/refs/heads/master/sprite/';
+	const formattedId = '0'.repeat(4 - pokemonId.toString().length) + pokemonId.toString();
+	const fullURL = baseURL + formattedId + '/' + 'AnimData.xml';
+	if (!isValidHttpUrl(fullURL)) return;
+
+	const animDataJson = await fetch(fullURL)
+		.then((r) => r.text())
+		.then((text) => {
+			try {
+				return xmlToJson(text);
+			} catch (error) {
+				console.error('Failed to parse AnimData.xml:', error);
+				return undefined;
+			}
+		});
+	return animDataJson;
 }
 
-function getSpriteSheetLocation(pokemonId: number, pokemonName: string) {
-	const spriteLoc =
-		'/sprites/' +
-		(pokemonId.toString().length < 3
-			? '0'.repeat(pokemonId.toString().length - 1)
-			: pokemonId.toString()) +
-		'_0.png';
-	return spriteLoc;
+export async function getMugshot(pokemonId: number) {
+	const baseURL =
+		'https://raw.githubusercontent.com/PMDCollab/SpriteCollab/refs/heads/master/portrait/';
+	const formattedId = '0'.repeat(4 - pokemonId.toString().length) + pokemonId.toString();
+	const fullURL = baseURL + formattedId + '/' + 'Normal.png';
+	if (await checkIf404(fullURL)) return;
+
+	const image = await fetch(fullURL);
+	const blob = await image.blob();
+
+	return blob;
+}
+
+export async function getSpriteSheet(pokemonId: number) {
+	const baseURL =
+		'https://raw.githubusercontent.com/PMDCollab/SpriteCollab/refs/heads/master/sprite/';
+	const formattedId = '0'.repeat(4 - pokemonId.toString().length) + pokemonId.toString();
+	const fullURL = baseURL + formattedId + '/' + 'Walk-Anim.png';
+	if (await checkIf404(fullURL)) return;
+
+	const image = await fetch(fullURL);
+	const blob = await image.blob();
+
+	return blob;
 }
 
 async function getPokemonStats(nameOrId: string) {
@@ -105,6 +129,16 @@ async function getPokemonStats(nameOrId: string) {
 	}
 }
 
+async function checkIf404(url: string) {
+	try {
+		const response = await fetch(url, { method: 'HEAD' }); // use HEAD to avoid downloading full content
+		return response.status === 404;
+	} catch (error) {
+		console.error('Fetch error:', error);
+		return true; // if fetch fails, treat as unreachable/404
+	}
+}
+
 function normaliseStats(stats: {
 	hp: number;
 	attack: number;
@@ -120,6 +154,60 @@ function normaliseStats(stats: {
 		speed: stats.speed
 	};
 	return normalisedStats;
+}
+
+function isValidHttpUrl(string: string) {
+	let url;
+
+	try {
+		url = new URL(string);
+	} catch (_) {
+		return false;
+	}
+
+	return url.protocol === 'http:' || url.protocol === 'https:';
+}
+
+export function xmlToJson(xmlString: string): any {
+	const parser = new DOMParser();
+	const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+
+	function parseElement(elem: Element): any {
+		const obj: any = {};
+
+		// Handle attributes
+		if (elem.attributes && elem.attributes.length > 0) {
+			for (let attr of Array.from(elem.attributes)) {
+				obj[`@${attr.name}`] = attr.value;
+			}
+		}
+
+		// Handle children
+		for (let child of Array.from(elem.children)) {
+			const childName = child.nodeName;
+			const childObj = parseElement(child);
+
+			if (obj[childName]) {
+				// If already exists, convert to array or push
+				if (!Array.isArray(obj[childName])) {
+					obj[childName] = [obj[childName]];
+				}
+				obj[childName].push(childObj);
+			} else {
+				obj[childName] = childObj;
+			}
+		}
+
+		// Handle text content (if no children)
+		if (elem.children.length === 0 && elem.textContent?.trim()) {
+			return elem.textContent.trim();
+		}
+
+		return obj;
+	}
+
+	const root = xmlDoc.documentElement;
+	return { [root.nodeName]: parseElement(root) };
 }
 
 let pokemon = [

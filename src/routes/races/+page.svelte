@@ -1,39 +1,57 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import TrackRenderer from '$lib/components/TrackRenderer.svelte';
-	import { subscribeToRaces, type Race } from '$lib/stores/race.svelte';
+	import { getRacesContext, setCurrentRaceContext, type Race } from '$lib/stores/race.svelte';
+	import RaceViewer from '$lib/components/RaceViewer.svelte';
+	import { getRacersContext, setCurrentRacersContext, type Racer } from '$lib/stores/racer.svelte';
 	import { onMount } from 'svelte';
-	import PocketBase from 'pocketbase';
-	import type { Racer } from '$lib/stores/racer.svelte';
+	import { getUserContext } from '$lib/stores/user.svelte';
 
-	let { data }: { data: { races: Race[] } } = $props();
-	const { races } = data;
+	const races = getRacesContext();
+	const racers = getRacersContext();
+	const user = getUserContext();
 
-	const _races: Race[] = $state(races);
-
-	onMount(async () => {
-		const pb = new PocketBase('http://localhost:8090');
-		pb.authStore.loadFromCookie(document.cookie);
-		await subscribeToRaces(_races, pb);
-	});
+	let currentRace: Race | undefined = $state(undefined);
+	let currentRacers: Racer[] | undefined = $state(undefined);
 </script>
 
-<div id="race-card-container" class="flex h-full w-full flex-wrap gap-2 p-2">
-	{#each _races as race}
-		<div class="card card-sm bg-base-100 h-100 w-94 shadow-sm">
-			<figure class="bg-base-200 h-55">
-				<TrackRenderer racetrack={race.racetrack} />
-			</figure>
-			<div class="card-body">
-				<h2 class="card-title">
-					{race.racetrack.name}
-					<div class="badge badge-secondary">{race.status}</div>
-				</h2>
-				<p>{race.id}</p>
-				<div class="card-actions justify-end">
-					<button onclick={() => goto(`/races/${race.id}`)} class="btn btn-primary">View</button>
+{#if user?.options.raceViewer.isViewing && currentRace && currentRacers}
+	<button
+		onclick={() => {
+			if (!user) return;
+			user.options.raceViewer.isViewing = false;
+			currentRace = undefined;
+			currentRacers = undefined;
+		}}
+		class="btn btn-primary absolute top-2 right-2 z-[1000]">Exit</button
+	>
+	<RaceViewer race={currentRace} racers={currentRacers} />
+{:else}
+	<div id="race-card-container" class="flex h-full w-full flex-wrap gap-6 p-6">
+		{#each races as race}
+			{@const raceRacers = racers.filter((racer) => racer.race === race.id)}
+			<div class="card card-sm bg-base-200 h-100 w-94 shadow-sm">
+				<figure class="bg-base-100 h-55">
+					<RaceViewer isPreview={true} {race} racers={raceRacers} />
+				</figure>
+				<div class="card-body">
+					<h2 class="card-title">
+						{race.racetrack.name}
+						<div class="badge badge-secondary">{race.status}</div>
+					</h2>
+					<p>{race.id}</p>
+					<div class="card-actions justify-end">
+						<button
+							onclick={() => {
+								if (!user) return;
+								user.options.raceViewer.isViewing = true;
+								currentRace = race;
+								currentRacers = raceRacers;
+							}}
+							class="btn btn-primary">View</button
+						>
+					</div>
 				</div>
 			</div>
-		</div>
-	{/each}
-</div>
+		{/each}
+	</div>
+{/if}

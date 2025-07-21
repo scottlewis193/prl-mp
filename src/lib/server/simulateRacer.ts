@@ -4,80 +4,99 @@ import { recordLapTime, startLapTimer } from './serverFunctions';
 
 const collisionThreshold = 64; // collision radius
 
-export function simulateRacer(racer: Racer, race: Race, now = Date.now(), totalLaps = 3) {
-	const elapsed = (now - new Date(racer.lastUpdatedAt).getTime()) / 1000;
-	const speed = racer.finished ? 20 : Math.floor(racer.pokemon.speed + Math.random() * racer.speed);
-	let distanceToTravel = racer.distanceFromCheckpoint + speed * elapsed;
+export function simulateRacer(racer: Racer, race: Race, now = Date.now(), totalLaps = 10) {
+	const elapsed = (now - new Date(racer.currentRace.lastUpdatedAt).getTime()) / 1000;
 
-	let checkpointIndex = racer.checkpointIndex;
-	let lapsCompleted = racer.lapsCompleted;
+	// Determine current speed
+	if (!racer.pokemon) {
+		return {
+			checkpointIndex: 0,
+			distanceFromCheckpoint: 0,
+			lapsCompleted: 0,
+			lastUpdatedAt: new Date(now).toISOString(),
+			finished: true,
+			x: 0,
+			y: 0
+		};
+	}
+	const speed = racer.currentRace.finished
+		? racer.pokemon.speed / 7
+		: racer.pokemon.speed + racer.stats.speed;
 
-	//tracking distance
+	// Total distance to travel this tick
+	let distanceToTravel = racer.currentRace.distanceFromCheckpoint + speed * elapsed;
+
+	let checkpointIndex = racer.currentRace.checkpointIndex;
+	let lapsCompleted = racer.currentRace.lapsCompleted;
+
+	const checkpoints = race.racetrack.checkpoints;
+	const trackWidth = race.racetrack.width || 64;
+
+	// Move through segments as needed
 	while (distanceToTravel > 0) {
-		const current = race.racetrack.checkpoints[checkpointIndex];
-		const next =
-			race.racetrack.checkpoints[
-				(checkpointIndex + 1) % Object.values(race.racetrack.checkpoints).length
-			];
-		const segmentLength = Math.hypot(next.x - current.x, next.y - current.y);
+		const a = checkpoints[checkpointIndex];
+		const b = checkpoints[(checkpointIndex + 1) % Object.values(checkpoints).length];
+		const segmentLength = Math.hypot(b.x - a.x, b.y - a.y);
 
-		//still on segment (between checkpoints)
+		// Still on current segment
 		if (distanceToTravel < segmentLength) {
-			return {
-				checkpointIndex,
-				distanceFromCheckpoint: distanceToTravel,
-				lapsCompleted,
-				lastUpdatedAt: new Date(now).toISOString(),
-				finished: false
-			};
+			break;
 		}
-		//has finished segment
+
 		distanceToTravel -= segmentLength;
 		checkpointIndex++;
+		racer.stats.speed = Math.floor(Math.random() * 5);
 
-		// Finished last checkpoint? Loop back and count lap
-		if (checkpointIndex >= Object.values(race.racetrack.checkpoints).length - 1) {
+		// Wrap checkpoints and count laps
+		if (checkpointIndex >= Object.values(checkpoints).length - 1) {
 			checkpointIndex = 0;
 			lapsCompleted++;
-			racer.speed = Math.floor(Math.random() * 100);
+
 			recordLapTime(racer, lapsCompleted);
 			startLapTimer([racer]);
+
 			if (lapsCompleted >= totalLaps) {
 				return {
 					checkpointIndex: 0,
 					distanceFromCheckpoint: 0,
 					lapsCompleted,
 					lastUpdatedAt: new Date(now).toISOString(),
-					finished: true
+					finished: true,
+					x: checkpoints[0].x,
+					y: checkpoints[0].y
 				};
 			}
 		}
 	}
+
+	// Compute exact position on segment
+	const a = checkpoints[checkpointIndex];
+	const b = checkpoints[(checkpointIndex + 1) % Object.values(checkpoints).length];
+
+	const dx = b.x - a.x;
+	const dy = b.y - a.y;
+	const segmentLength = Math.hypot(dx, dy);
+	const t = Math.min(distanceToTravel / segmentLength, 1);
+
+	// Centerline position
+	const cx = a.x + dx * t;
+	const cy = a.y + dy * t;
+
+	// Lane offset
+	const nx = -dy / segmentLength;
+	const ny = dx / segmentLength;
+	const offset = ((racer.positioning.trackOffset ?? 0) * trackWidth) / 2;
+
+	const x = cx + nx * offset;
+	const y = cy + ny * offset;
 
 	return {
 		checkpointIndex,
 		distanceFromCheckpoint: distanceToTravel,
 		lapsCompleted,
 		lastUpdatedAt: new Date(now).toISOString(),
-		finished: false
+		finished: false,
+		x,
+		y
 	};
 }
-
-// function checkCollisions(positions: { x: number; y: number; id: string }[]) {
-// 	const collisions: [string, string][] = [];
-
-// 	for (let i = 0; i < positions.length; i++) {
-// 		for (let j = i + 1; j < positions.length; j++) {
-// 			const a = positions[i];
-// 			const b = positions[j];
-
-// 			const dist = Math.hypot(b.x - a.x, b.y - a.y);
-
-// 			if (dist < collisionThreshold) {
-// 				collisions.push([a.id, b.id]);
-// 			}
-// 		}
-// 	}
-
-// 	return collisions;
-// }

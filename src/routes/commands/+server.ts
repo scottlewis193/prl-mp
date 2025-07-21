@@ -19,7 +19,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		case '/createrace':
 			//since we are creating a new race, we need to clear the clients racers and race data
 			const race = await createRace();
-			console.log(race);
+
 			await createDefaultRacers(race);
 			return json(returnData);
 		case '/startrace':

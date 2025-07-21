@@ -1,11 +1,12 @@
-import pb from '../pocketbase';
 import PocketBase from 'pocketbase';
+import pb from '../pocketbase';
 
 import { v4 as uuid } from 'uuid';
 import { defaultRaceTrack, type RaceTrack } from '../racetrack';
 import { getContext, setContext } from 'svelte';
+import type { Racer } from './racer.svelte';
 
-export interface Race {
+type RaceType = {
 	id?: string;
 	name: string;
 	status: 'pending' | 'countdown' | 'running' | 'finished' | 'cancelled' | 'settled';
@@ -14,33 +15,43 @@ export interface Race {
 	startTime: string;
 	endTime: string;
 	totalLaps: number;
-}
-
-export const defaultRace: Race = {
-	name: `Race ${uuid().slice(0, 5)}`,
-	status: 'pending',
-	startTime: new Date(Date.now()).toISOString(),
-	totalLaps: 3,
-	racetrack: defaultRaceTrack,
-	winner: '',
-	endTime: ''
 };
 
-const raceKey = Symbol('race');
+export class Race implements RaceType {
+	id: string = '0';
+	name: string = '';
+	status: 'pending' | 'countdown' | 'running' | 'finished' | 'cancelled' | 'settled' = 'pending';
+	racetrack: RaceTrack = defaultRaceTrack;
+	winner: string = '';
+	startTime: string = new Date(Date.now()).toISOString();
+	totalLaps: number = 99;
+	endTime: string = '';
+}
 
-export function setRaceContext(race: Race | undefined = undefined) {
-	let _race = $state(defaultRace);
-	if (race) _race = race;
+const raceKey = Symbol('race');
+const racesKey = Symbol('races');
+
+export function setCurrentRaceContext(race: Race) {
+	const _race = $state(new Race());
 
 	return setContext<Race>(raceKey, _race);
 }
 
-export function getRaceContext(): Race {
+export function getCurrentRaceContext(): Race {
 	return getContext<Race>(raceKey);
 }
 
+export function setRacesContext(races: Race[]) {
+	const _races: Race[] = $state(races);
+	return setContext<Race[]>(racesKey, _races);
+}
+
+export function getRacesContext(): Race[] {
+	return getContext<Race[]>(racesKey);
+}
+
 export async function createRace() {
-	const newRace = defaultRace;
+	const newRace = new Race();
 	const race = (await pb.collection('races').create(newRace)) as Race;
 	return race;
 }
@@ -85,6 +96,7 @@ export async function updateRace(id: string, updates: Partial<Race>) {
 }
 
 export async function subscribeToRaces(racesAry: Race[], pb: PocketBase) {
+	await pb.collection('races').unsubscribe();
 	await pb.collection('races').subscribe('*', async function (e) {
 		const raceRecord = e.record as unknown as Race;
 		switch (e.action) {
@@ -107,4 +119,9 @@ export async function subscribeToRaces(racesAry: Race[], pb: PocketBase) {
 				break;
 		}
 	});
+}
+
+export async function unsubscribeFromRaces(pb: PocketBase) {
+	if (!pb) return;
+	await pb.collection('races').unsubscribe();
 }

@@ -22,7 +22,8 @@ import { EventSource } from 'eventsource';
 import { createDefaultRacers, resolveOvertaking, startLapTimer } from './serverFunctions';
 import pb from '$lib/pocketbase';
 
-const SIM_INTERVAL = 100;
+//const SIM_INTERVAL = 100;
+const SIM_INTERVAL = 500;
 
 let racers: Racer[] = [];
 let races: Race[] = [];
@@ -38,72 +39,82 @@ export async function startUp() {
 	await subscribeToRacers(racers, pb);
 	await subscribeToRaces(races, pb);
 
-	serverTick();
+	startServerTick();
 }
 
-let lastUpdate = Date.now();
+function startServerTick() {
+	setInterval(serverTick, SIM_INTERVAL);
+}
 
 async function serverTick() {
-	const glInterval = setInterval(async () => {
-		// races = await getRunningRaces();
-		const now = Date.now();
+	const now = Date.now();
 
-		const dt = (now - lastUpdate) / 1000; // in seconds
-		lastUpdate = now;
+	// console.clear();
+	// console.time('gameloop');
 
-		// now use `dt` to simulate racer progress
-		// console.clear();
-		// console.time('gameloop');
+	for (const race of races) {
+		if (race.status !== 'running') continue;
 
-		//simulate racers and assign results directly
-		for (const race of races) {
-			if (race.status !== 'running') continue;
-			const raceRacers = racers.filter((racer) => racer.raceId == race.id);
-			for (const racer of raceRacers) {
-				const result = simulateRacer(racer, race, now, race.totalLaps);
-				racer.checkpointIndex = result.checkpointIndex;
-				racer.distanceFromCheckpoint = result.distanceFromCheckpoint;
-				racer.lapsCompleted = result.lapsCompleted;
-				racer.lastUpdatedAt = result.lastUpdatedAt;
+		const raceRacers = racers.filter((r) => r.race === race.id);
 
-				//check if racer has finished
-				if (result.finished) {
-					//check if first racer to finish
-					if (!racers.some((r) => r.finished)) {
-						await updateRace(race.id || '0', {
-							winner: racer.id
-						});
-						console.log(`🏁 Race "${race.name}" finished. Winner: ${racer?.name}`);
+		let raceChanged = false;
+
+		// Simulate racers
+		await Promise.all(
+			raceRacers.map(async (racer) => {
+				const {
+					checkpointIndex,
+					distanceFromCheckpoint,
+					lapsCompleted,
+					lastUpdatedAt,
+					x,
+					y,
+					finished
+				} = simulateRacer(racer, race, now, race.totalLaps);
+
+				// Update racer state
+				racer.currentRace.checkpointIndex = checkpointIndex;
+				racer.currentRace.distanceFromCheckpoint = distanceFromCheckpoint;
+				racer.currentRace.lapsCompleted = lapsCompleted;
+				racer.currentRace.lastUpdatedAt = lastUpdatedAt;
+				racer.positioning.x = x;
+				racer.positioning.y = y;
+				racer.positioning.trackOffset = racer.positioning.targetTrackOffset ?? 0;
+
+				// Check for winner
+				if (finished && !racer.currentRace.finished) {
+					racer.currentRace.finished = true;
+
+					if (!raceRacers.some((r) => r.currentRace.finished && r.id !== racer.id)) {
+						race.winner = racer.id;
+						raceChanged = true;
+						console.log(`🏁 Race "${race.name}" finished. Winner: ${racer.name}`);
 					}
-					racer.finished = true;
 				}
-			}
+			})
+		);
 
-			//Resolve overtaking using computed results
-			resolveOvertaking(racers, now, race);
+		// Resolve overtaking
+		resolveOvertaking(raceRacers, now, race);
 
-			//set status to finished if all racers have finished
-			if (racers.every((r) => r.finished)) {
-				await updateRace(race.id || '0', {
-					status: 'finished'
-				});
-			}
-
-			//batch update db
-
-			await Promise.all(
-				racers.map((racer) => {
-					const racersRace = races.find((r) => r.id === racer.raceId);
-					if (racersRace?.status === 'pending') return;
-					racer.trackOffset = racer.targetTrackOffset ?? 0;
-					// if (racer.finished) console.log(racer.finished);
-					return updateRacer(racer.id, racer);
-				})
-			);
+		// If all racers finished, mark race as finished
+		if (raceRacers.every((r) => r.currentRace.finished)) {
+			race.status = 'finished';
+			raceChanged = true;
 		}
 
-		// console.timeEnd('gameloop');
-		// console.clear();
-		// console.log('Races:', races.length, 'Racers:', racers.length);
-	}, SIM_INTERVAL);
+		// Batch update only racers in this race
+		await Promise.all(
+			raceRacers.map(async (r) => {
+				if ((await updateRacer(r.id, r)) == false) racers.splice(racers.indexOf(r), 1); //remove racer from array if failed to update
+			})
+		);
+
+		// Only update race if it changed
+		if (raceChanged) {
+			await updateRace(race.id || '0', race);
+		}
+	}
+
+	// console.timeEnd('gameloop');
 }

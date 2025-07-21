@@ -1,16 +1,20 @@
 @import 'tailwindcss';
 @plugin 'daisyui' {
-	themes: all;
+	themes:
+		acid --default,
+		dark --prefersdark,
+		cupcake;
 }
 
 * {
 	box-sizing: border-box;
-	font:
-		16px 'Inter',
-		sans-serif;
+	font-family: 'Inter', sans-serif;
+	font-weight: 400;
 }
-
+html {
+	margin-left: calc(100vw - 100%);
+}
 body,
 html {
-	@apply h-full w-full;
+	@apply bg-base-300 h-full w-full overflow-y-scroll;
 }

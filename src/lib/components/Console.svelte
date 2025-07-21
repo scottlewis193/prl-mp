@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { getRaceContext } from '$lib/stores/race.svelte';
+	import { getCurrentRaceContext } from '$lib/stores/race.svelte';
 	import { getRacersContext } from '$lib/stores/racer.svelte';
 	import { onDestroy, onMount } from 'svelte';
 
 	let consoleVisible = $state(false);
 	let consoleInput: HTMLInputElement | null = $state(null);
 	let racers = getRacersContext();
-	let race = getRaceContext();
+	let race = getCurrentRaceContext();
 
 	function toggleConsoleVisibility(event: KeyboardEvent) {
 		if (event.key === '`') {
