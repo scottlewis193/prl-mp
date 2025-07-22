@@ -19,4 +19,4 @@ while ((match = regex.exec(raw)) !== null) {
 // Step 3: Save to a new JSON file
 fs.writeFileSync('pokemon_with_ids.json', JSON.stringify(results, null, 2), 'utf-8');
 
-console.log(`✅ Saved ${results.length} entries to pokemon_with_ids.json`);
+// console.log(`✅ Saved ${results.length} entries to pokemon_with_ids.json`);

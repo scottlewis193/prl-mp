@@ -20,7 +20,6 @@
 	const user = $state(data?.user);
 	const url = $derived(page.url.pathname);
 	const urlParams = $derived(page.url.searchParams);
-	console.log();
 
 	const races = setRacesContext(data.races);
 	const racers = setRacersContext(data.racers);

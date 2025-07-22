@@ -20,7 +20,6 @@
 	}: { race?: Race; racers?: Racer[]; isPreview?: boolean } = $props();
 
 	if (race && racers) {
-		console.log('defined');
 		setCurrentRaceContext(race);
 		setCurrentRacersContext(racers);
 	}

@@ -13,7 +13,7 @@ import { Trainer } from '$lib/stores/trainer.svelte';
 
 export const init: ServerInit = async () => {
 	startUp();
-	// importGen1to5RacersToPocketBase();
+	//importGen1to5RacersToPocketBase();
 };
 
 function formatPokemonStats(stats: any[]): {
@@ -132,6 +132,7 @@ async function importGen1to5RacersToPocketBase() {
 	// 			leaderboardImage: mugshotLocation
 	// 		});
 	// 		console.log(`Created pokemon for ${data.name} (#${id})`);
+
 	// 	} catch (err) {
 	// 		console.error(`Error creating racer for Pokémon #${id}:`, err);
 	// 	}
@@ -157,7 +158,9 @@ async function importGen1to5RacersToPocketBase() {
 	//get 500 random pokemon
 	let randomPokemon = [];
 	for (let i = 0; i < 500; i++) {
-		randomPokemon.push(pokemon[Math.floor(Math.random() * pokemon.length)] as unknown as Pokemon);
+		const index = Math.floor(Math.random() * pokemon.length);
+		randomPokemon.push(pokemon[index] as unknown as Pokemon);
+		pokemon.splice(index, 1);
 	}
 	//sort by baseStatTotal lowest to highest
 	randomPokemon.sort((a, b) => a.stats.baseStatTotal - b.stats.baseStatTotal);
@@ -168,6 +171,7 @@ async function importGen1to5RacersToPocketBase() {
 	for (const pokemon of randomPokemon) {
 		const isMale = Math.random() < 0.5 ? true : false;
 		//here we are filtering names based on gender and starting letter
+
 		const filteredNames = isMale
 			? male.filter((name) => name.toLowerCase().startsWith(pokemon.name.charAt(0)))
 			: female.filter((name) => name.toLowerCase().startsWith(pokemon.name.charAt(0)));
@@ -196,6 +200,7 @@ async function importGen1to5RacersToPocketBase() {
 		delete racer.id;
 		delete racer.race;
 		pb.collection('racers').create(JSON.parse(JSON.stringify(racer)));
+		console.log(`Created racer ${racer.name}`);
 		i++;
 	}
 }

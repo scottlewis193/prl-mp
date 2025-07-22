@@ -264,7 +264,9 @@ export async function deleteAllRacers() {
 }
 
 export async function getAllRacers() {
-	return (await pb.collection('racers').getFullList({ expand: 'pokemon' })) as Racer[];
+	return (await pb
+		.collection('racers')
+		.getFullList({ expand: 'pokemon,trainer,league' })) as Racer[];
 }
 
 export async function getRacers(raceId: string) {
@@ -362,7 +364,7 @@ export async function subscribeToRacers(racersAry: Racer[], pb: PocketBase) {
 		'*',
 		async function (e) {
 			const racerRecord = e.record as unknown as Racer;
-			console.log(racerRecord);
+
 			switch (e.action) {
 				case 'create':
 					racersAry.push(racerRecord);
