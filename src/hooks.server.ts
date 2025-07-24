@@ -13,6 +13,7 @@ import { Trainer } from '$lib/stores/trainer.svelte';
 
 export const init: ServerInit = async () => {
 	startUp();
+
 	//importGen1to5RacersToPocketBase();
 };
 
@@ -234,7 +235,7 @@ export const handle = async ({ event, resolve }) => {
 	// // send back the default 'pb_auth' cookie to the client with the latest store state
 	response.headers.append(
 		'set-cookie',
-		event.locals.pb.authStore.exportToCookie({ sameSite: 'Lax' })
+		event.locals.pb.authStore.exportToCookie({ sameSite: 'Lax', httpOnly: false })
 	);
 
 	return response;

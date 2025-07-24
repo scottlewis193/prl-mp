@@ -26,32 +26,37 @@
 	>
 	<RaceViewer race={currentRace} racers={currentRacers} />
 {:else}
-	<div id="race-card-container" class="flex h-full w-full flex-wrap gap-6 p-6">
-		{#each races as race}
-			{@const raceRacers = racers.filter((racer) => racer.race === race.id)}
-			<div class="card card-sm bg-base-200 h-100 w-94 shadow-sm">
-				<figure class="bg-base-100 h-55">
-					<RaceViewer isPreview={true} {race} racers={raceRacers} />
-				</figure>
-				<div class="card-body">
-					<h2 class="card-title">
-						{race.racetrack.name}
-						<div class="badge badge-secondary">{race.status}</div>
-					</h2>
-					<p>{race.id}</p>
-					<div class="card-actions justify-end">
-						<button
-							onclick={() => {
-								if (!user) return;
-								user.options.raceViewer.isViewing = true;
-								currentRace = race;
-								currentRacers = raceRacers;
-							}}
-							class="btn btn-primary">View</button
-						>
+	<div class="flex h-full w-full justify-center">
+		<div
+			id="race-card-container"
+			class="flex h-full w-[120rem] flex-wrap gap-4 overflow-y-scroll p-4"
+		>
+			{#each races as race}
+				{@const raceRacers = racers.filter((racer) => racer.race === race.id)}
+				<div class="card card-sm bg-base-200 h-100 w-94 shadow-sm">
+					<figure class="bg-base-100 h-55">
+						<RaceViewer isPreview={true} {race} racers={raceRacers} />
+					</figure>
+					<div class="card-body">
+						<h2 class="card-title">
+							{race.racetrack.name}
+							<div class="badge badge-secondary">{race.status}</div>
+						</h2>
+						<p>{race.id}</p>
+						<div class="card-actions justify-end">
+							<button
+								onclick={() => {
+									if (!user) return;
+									user.options.raceViewer.isViewing = true;
+									currentRace = race;
+									currentRacers = raceRacers;
+								}}
+								class="btn btn-primary">View</button
+							>
+						</div>
 					</div>
 				</div>
-			</div>
-		{/each}
+			{/each}
+		</div>
 	</div>
 {/if}

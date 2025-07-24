@@ -133,3 +133,5 @@ export async function createRace() {
 	await createDefaultRacers(race);
 	return race;
 }
+
+export async function createDailyLeagueEvents() {}

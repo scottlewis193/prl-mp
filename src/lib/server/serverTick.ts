@@ -52,6 +52,13 @@ async function serverTick() {
 	// console.clear();
 	// console.time('gameloop');
 
+	await simulateRaces();
+	await simulateEvents();
+	await simulateMarkets();
+	// console.timeEnd('gameloop');
+}
+
+async function simulateRaces() {
 	for (const race of races) {
 		if (race.status !== 'running') continue;
 
@@ -86,7 +93,7 @@ async function serverTick() {
 					racer.currentRace.finished = true;
 
 					if (!raceRacers.some((r) => r.currentRace.finished && r.id !== racer.id)) {
-						race.winner = racer.id;
+						race.winner = racer?.id || '0';
 						raceChanged = true;
 						console.log(`🏁 Race "${race.name}" finished. Winner: ${racer.name}`);
 					}
@@ -106,7 +113,7 @@ async function serverTick() {
 		// Batch update only racers in this race
 		await Promise.all(
 			raceRacers.map(async (r) => {
-				if ((await updateRacer(r.id, r)) == false) racers.splice(racers.indexOf(r), 1); //remove racer from array if failed to update
+				if ((await updateRacer(r?.id || '0', r)) == false) racers.splice(racers.indexOf(r), 1); //remove racer from array if failed to update
 			})
 		);
 
@@ -115,6 +122,8 @@ async function serverTick() {
 			await updateRace(race.id || '0', race);
 		}
 	}
-
-	// console.timeEnd('gameloop');
 }
+
+async function simulateEvents() {}
+
+async function simulateMarkets() {}

@@ -82,7 +82,8 @@ type RacerType = {
 		totalEarnings: number; // Total PokéD won
 		earningsPerShare: number; // = totalEarnings / totalShares
 		lastPayoutAt?: string;
-		totalShares: number;
+		issuedShares: number;
+		outstandingShares: number;
 		currentSharePrice: number; // e.g., 12.50 PokéD
 		priceHistory: {
 			timestamp: string;
@@ -205,14 +206,16 @@ export class Racer implements RacerType {
 		totalEarnings: number;
 		earningsPerShare: number;
 		lastPayoutAt?: string;
-		totalShares: number;
+		issuedShares: number;
+		outstandingShares: number;
 		currentSharePrice: number;
 		priceHistory: { timestamp: string; price: number; reason?: string }[];
 	} = $state({
 		totalEarnings: 0,
 		earningsPerShare: 0,
 		lastPayoutAt: undefined,
-		totalShares: 0,
+		issuedShares: 0,
+		outstandingShares: 0,
 		currentSharePrice: 0,
 		priceHistory: []
 	});
