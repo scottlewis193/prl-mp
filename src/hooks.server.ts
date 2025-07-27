@@ -5,7 +5,7 @@ import type { Handle, ServerInit } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 import pb from '$lib/pocketbase';
 import { getMugshot, getSpriteSheet } from '$lib/server/pokemon';
-import { URL } from '$env/static/private';
+import { DISABLE_AUTH, URL } from '$env/static/private';
 import { PUBLIC_PB_URL } from '$env/static/public';
 import { female, male } from '$lib/server/static/names';
 import { Pokemon, Racer } from '$lib/stores/racer.svelte';
@@ -207,6 +207,8 @@ async function importGen1to5RacersToPocketBase() {
 }
 
 export const handle = async ({ event, resolve }) => {
+	console.time('handle');
+
 	//get pb instance
 	event.locals.pb = new PocketBase(PUBLIC_PB_URL);
 	// load the store data from the request cookie string
@@ -223,7 +225,8 @@ export const handle = async ({ event, resolve }) => {
 		event.locals.user = null;
 	}
 
-	if (!event.locals.user) {
+	if (!event.locals.user && DISABLE_AUTH == 'false') {
+		console.log('not logged in');
 		if (event.route.id !== '/login') {
 			// redirect to login if not logged in
 			throw redirect(303, '/login');
@@ -238,5 +241,6 @@ export const handle = async ({ event, resolve }) => {
 		event.locals.pb.authStore.exportToCookie({ sameSite: 'Lax', httpOnly: false })
 	);
 
+	console.timeEnd('handle');
 	return response;
 };

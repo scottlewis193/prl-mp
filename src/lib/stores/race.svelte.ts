@@ -1,19 +1,17 @@
 import PocketBase from 'pocketbase';
 import pb from '../pocketbase';
 
-import { v4 as uuid } from 'uuid';
-import { defaultRaceTrack, type RaceTrack } from '../racetrack';
+// import { defaultRaceTrack, type RaceTrack } from '../racetrack';
 import { getContext, setContext } from 'svelte';
-import type { Racer } from './racer.svelte';
 
-type RaceType = {
+export type RaceType = {
 	id?: string;
 	name: string;
 	status: 'pending' | 'countdown' | 'running' | 'finished' | 'cancelled' | 'settled';
-	racetrack: RaceTrack;
+	racetrack: string;
 	winner: string;
-	startTime: string;
-	endTime: string;
+	startTime: Date;
+	endTime: Date;
 	totalLaps: number;
 };
 
@@ -21,11 +19,11 @@ export class Race implements RaceType {
 	id: string = '0';
 	name: string = '';
 	status: 'pending' | 'countdown' | 'running' | 'finished' | 'cancelled' | 'settled' = 'pending';
-	racetrack: RaceTrack = defaultRaceTrack;
+	racetrack: string = '175hl67e5pvjjib';
 	winner: string = '';
-	startTime: string = new Date(Date.now()).toISOString();
+	startTime: Date = new Date();
 	totalLaps: number = 99;
-	endTime: string = '';
+	endTime: Date = new Date();
 }
 
 const raceKey = Symbol('race');

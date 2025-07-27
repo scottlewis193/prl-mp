@@ -119,6 +119,8 @@ type RacerType = {
 	_targetY: number;
 	_interpStartTime: number;
 	_interpDuration: number;
+
+	_active: boolean;
 };
 
 export class Racer implements RacerType {
@@ -233,6 +235,7 @@ export class Racer implements RacerType {
 	_displayX?: number | undefined;
 	_displayY?: number | undefined;
 	_lastFrameTime: number = $state(0);
+	_active: boolean = $state(false);
 }
 
 export type SortedRacer = Racer & { progress: number; totalProgress: number; hasBestLap: boolean };
@@ -415,4 +418,21 @@ function updateRacerOnScreen(updated: Racer) {
 export async function unsubscribeFromRacers(pb: PocketBase) {
 	if (!pb) return;
 	await pb.collection('racers').unsubscribe();
+}
+
+export function getSymbol(racer: Racer) {
+	const pokemon = racer.expand.pokemon as Pokemon;
+	const symbolChar1 = racer.name.charAt(0).toUpperCase();
+	const symbolChar2 = racer.name
+		.charAt(
+			Math.ceil(
+				(racer.name.length - (racer.name.charAt((racer.name.length - 1) / 2) == '-' ? 0 : 1)) / 2
+			)
+		)
+		.toUpperCase();
+	const symbolChar3 = pokemon.name.charAt(0).toUpperCase();
+	const symbolChar4 = pokemon.name.charAt((pokemon.name.length - 1) / 2).toUpperCase();
+	const symbol = symbolChar1 + symbolChar2 + symbolChar3 + symbolChar4;
+
+	return symbol;
 }

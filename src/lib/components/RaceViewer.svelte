@@ -3,7 +3,6 @@
 	import {
 		getCurrentRacersContext,
 		setCurrentRacersContext,
-		unsubscribeFromRacers,
 		type Racer
 	} from '$lib/stores/racer.svelte';
 	import { onMount } from 'svelte';
@@ -12,25 +11,35 @@
 	import PocketBase from 'pocketbase';
 	import PixiTrackRenderer from './PixiTrackRenderer.svelte';
 	import { goto } from '$app/navigation';
+	import {
+		getCurrentRacetrackContext,
+		RaceTrack,
+		setCurrentRacetrackContext,
+		type RaceTrackType
+	} from '$lib/stores/racetrack.svelte';
+	import Console from './Console.svelte';
 
 	const {
 		race = undefined,
 		racers = undefined,
+		racetrack = undefined,
 		isPreview = false
-	}: { race?: Race; racers?: Racer[]; isPreview?: boolean } = $props();
+	}: { race?: Race; racers?: Racer[]; racetrack?: RaceTrack; isPreview?: boolean } = $props();
 
-	if (race && racers) {
+	if (race && racers && racetrack) {
 		setCurrentRaceContext(race);
 		setCurrentRacersContext(racers);
+		setCurrentRacetrackContext(racetrack);
 	}
 
 	const _race = getCurrentRaceContext();
 	const _racers = getCurrentRacersContext();
+	const _racetrack = getCurrentRacetrackContext();
 
 	const camera: Camera = setCameraContext();
 </script>
 
-{#if _race?.startTime !== '' && _race}
+{#if _race}
 	{#if !isPreview}
 		<LeaderBoard />
 	{/if}

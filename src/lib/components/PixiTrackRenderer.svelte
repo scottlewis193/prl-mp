@@ -1,15 +1,17 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 	import { Application, Assets, Container, Rectangle, Sprite, Texture } from 'pixi.js';
-	import trackData from '$lib/tracks/defaultTrack.json';
 
 	import { getCameraContext } from '$lib/stores/camera.svelte';
 	import { getCurrentRaceContext, type Race } from '$lib/stores/race.svelte';
 	import { getCurrentRacersContext, type Racer } from '$lib/stores/racer.svelte';
+	import { getCurrentRacetrackContext } from '$lib/stores/racetrack.svelte';
 
 	let { tilesetUrl, isPreview = false }: { tilesetUrl: string; isPreview?: boolean } = $props();
 
 	const race = getCurrentRaceContext();
+	const racetrack = getCurrentRacetrackContext();
+
 	const racers = getCurrentRacersContext();
 	const camera = getCameraContext();
 
@@ -45,6 +47,7 @@
 	};
 
 	onMount(async () => {
+		if (isPreview) return;
 		app = new Application();
 
 		await app.init({
@@ -61,7 +64,7 @@
 
 		//set default camera position
 		if (isPreview) {
-			const zoom = (trackData.width - 376 / ((trackData.width + 376) / 2)) / 100;
+			const zoom = (racetrack.data.width - 376 / ((racetrack.data.width + 376) / 2)) / 100;
 
 			camera.zoom = Number(zoom.toFixed(1));
 			updateCamera();
@@ -80,9 +83,9 @@
 	});
 
 	onDestroy(() => {
-		// if (app) {
-		// 	app.destroy(true, { children: true, texture: true, context: true });
-		// }
+		if (app) {
+			app.destroy(true, { children: true, texture: true, context: true });
+		}
 	});
 
 	function addListeners() {
@@ -250,7 +253,7 @@
 			src: tilesetUrl,
 			data: { scaleMode: 'nearest', roundPixels: true }
 		});
-		for (const layer of trackData.layers) {
+		for (const layer of racetrack.data.layers) {
 			//get checkpoints
 			if (layer.name.toLowerCase() == 'checkpoints') {
 				for (const object of layer?.objects || []) {
@@ -284,7 +287,7 @@
 					// });
 					const tileTexture = new Texture({
 						source: tileset,
-						frame: getTileFrame(texIndex, trackData.tilesets[0])
+						frame: getTileFrame(texIndex, racetrack.data.tilesets[0])
 					});
 					const sprite = new Sprite(tileTexture);
 					sprite.x = Math.floor(tileX);
@@ -369,7 +372,7 @@
 	function getAngle(racer: Racer): number {
 		if (!race) return 0;
 
-		const checkpoints = race.racetrack.checkpoints;
+		const checkpoints = racetrack.checkpoints;
 		const i = racer.currentRace.checkpointIndex;
 		const a = checkpoints[i];
 		const b = checkpoints[(i + 1) % Object.values(checkpoints).length];
@@ -438,4 +441,8 @@
 	{camera.mode + ' ' + camera.targetRacerId}
 </div> -->
 
-<canvas class="" id="pixi-canvas" bind:this={canvasEl}></canvas>
+{#if isPreview}
+	<img src="preview.png" alt="Preview" />
+{:else}
+	<canvas class="" id="pixi-canvas" bind:this={canvasEl}></canvas>
+{/if}

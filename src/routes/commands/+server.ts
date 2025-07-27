@@ -1,4 +1,3 @@
-import { createDefaultRacers } from '$lib/server/racers';
 import { createRace, deleteAllRaces, updateRace } from '$lib/stores/race.svelte';
 import { deleteAllRacers, updateRacersByRaceId } from '$lib/stores/racer.svelte';
 import { json, type RequestHandler } from '@sveltejs/kit';
@@ -20,7 +19,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			//since we are creating a new race, we need to clear the clients racers and race data
 			const race = await createRace();
 
-			await createDefaultRacers(race);
+			// await createDefaultRacers(race);
 			return json(returnData);
 		case '/startrace':
 			if (params.length === 0) {
@@ -29,7 +28,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			}
 			await updateRace(params[0], { status: 'running' });
 			//we need to update the lastUpdatedAt before starting the race else the racers will end up in weird positions when the simulation starts
-			await updateRacersByRaceId(params[0], { lastUpdatedAt: new Date().toISOString() });
+			// await updateRacersByRaceId(params[0], { lastUpdatedAt: new Date().toISOString() });
 			return json(returnData);
 		case '/deleteallraces':
 			await deleteAllRaces();
