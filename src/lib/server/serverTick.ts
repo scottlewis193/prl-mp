@@ -21,7 +21,7 @@ import { simulateRacer } from './simulateRacer';
 import { EventSource } from 'eventsource';
 
 import { create5DayLeagueEvents, resolveOvertaking, startLapTimer } from './serverFunctions';
-import pb from '$lib/pocketbase';
+import pb from './pocketbase';
 import {
 	getAllEvents,
 	subscribeToEvents,
@@ -29,6 +29,7 @@ import {
 	type EventType
 } from '$lib/stores/event.svelte';
 import { subscribeToUsers, type User } from '$lib/stores/user.svelte';
+import { getAllRacetracks, RaceTrack } from '$lib/stores/racetrack.svelte';
 
 //const SIM_INTERVAL = 100;
 const SIM_INTERVAL = 500;
@@ -37,6 +38,7 @@ let racers: Racer[] = [];
 let races: Race[] = [];
 let events: EventType[] = [];
 let users: User[] = [];
+let racetracks: RaceTrack[] = [];
 
 export async function startUp() {
 	console.log('Starting up...');
@@ -46,6 +48,7 @@ export async function startUp() {
 	racers = await getAllRacers();
 	races = await getAllRaces();
 	events = await getAllEvents();
+	racetracks = await getAllRacetracks();
 
 	await subscribeToRacers(racers, pb);
 	await subscribeToRaces(races, pb);
@@ -76,6 +79,7 @@ async function simulateRaces() {
 		if (race.status !== 'running') continue;
 
 		const raceRacers = racers.filter((r) => r.race === race.id);
+		const racetrack = racetracks.find((track) => track.id === race.racetrack) || racetracks[0];
 
 		let raceChanged = false;
 		const now = Date.now();
@@ -116,7 +120,7 @@ async function simulateRaces() {
 		);
 
 		// Resolve overtaking
-		resolveOvertaking(raceRacers, now, race);
+		resolveOvertaking(raceRacers, now, race, racetrack);
 
 		// If all racers finished, mark race as finished
 		if (raceRacers.every((r) => r.currentRace.finished)) {

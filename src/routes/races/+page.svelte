@@ -1,43 +1,26 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import {
-		getRacesContext,
-		setCurrentRaceContext,
-		subscribeToRaces,
-		type Race
-	} from '$lib/stores/race.svelte';
+	import { getRacesContext, type Race } from '$lib/stores/race.svelte';
 	import RaceViewer from '$lib/components/RaceViewer.svelte';
-	import {
-		getRacersContext,
-		setCurrentRacersContext,
-		subscribeToRacers,
-		type Racer
-	} from '$lib/stores/racer.svelte';
-	import { onMount } from 'svelte';
-	import { getUserContext } from '$lib/stores/user.svelte';
+	import { getRacersContext, type Racer } from '$lib/stores/racer.svelte';
 	import { getRacetracksContext, type RaceTrack } from '$lib/stores/racetrack.svelte';
 	import { getPBContext } from '$lib/stores/pb.svelte';
 
 	const { data } = $props();
 
-	const { races, racers, racetracks, user } = $derived(data);
-
 	let pb = getPBContext();
+	let races = getRacesContext();
+	let racers = getRacersContext();
+	let racetracks = getRacetracksContext();
 	let currentRace: Race | undefined = $state(undefined);
 	let currentRacers: Racer[] | undefined = $state(undefined);
 	let currentRacetrack: RaceTrack | undefined = $state(undefined);
-
-	onMount(async () => {
-		subscribeToRaces(races, pb);
-		subscribeToRacers(racers, pb);
-	});
 </script>
 
-{#if user?.options?.raceViewer?.isViewing && currentRace && currentRacers && currentRacetrack}
+{#if data.user?.options?.raceViewer?.isViewing && currentRace && currentRacers && currentRacetrack}
 	<button
 		onclick={() => {
-			if (!user) return;
-			user.options.raceViewer.isViewing = false;
+			if (!data.user) return;
+			data.user.options.raceViewer.isViewing = false;
 			currentRace = undefined;
 			currentRacers = undefined;
 			currentRacetrack = undefined;
@@ -68,8 +51,8 @@
 						<div class="card-actions justify-end">
 							<button
 								onclick={() => {
-									if (!user) return;
-									user.options.raceViewer.isViewing = true;
+									if (!data.user) return;
+									data.user.options.raceViewer.isViewing = true;
 									currentRace = race;
 									currentRacers = raceRacers;
 									currentRacetrack = raceTrack;

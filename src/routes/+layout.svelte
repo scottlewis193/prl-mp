@@ -8,14 +8,30 @@
 	import TopBar from '$lib/components/TopBar.svelte';
 	import BottomBar from '$lib/components/BottomBar.svelte';
 	import { setPBContext } from '$lib/stores/pb.svelte';
-	import { pwaInfo } from 'virtual:pwa-info';
+	import '$lib/pwa.ts';
+	import { setClientContext } from '$lib/stores/client.svelte';
+	import { afterNavigate, beforeNavigate } from '$app/navigation';
+	import Spinner from '$lib/components/Spinner.svelte';
+	import { subscribeToPush } from '$lib/subscribe';
+	import { getAllRacers, setRacersContext } from '$lib/stores/racer.svelte';
+	import { getAllRaces, setRacesContext } from '$lib/stores/race.svelte';
+	import RacerList from '$lib/components/RacerList.svelte';
+	import { setRacetracksContext } from '$lib/stores/racetrack.svelte';
 
 	let { children, data } = $props();
-	let webManifest = $state(pwaInfo ? pwaInfo?.webManifest.linkTag : '');
+
 	const user: Partial<User> = $state(data?.user || {});
 	const url = $derived(page.url.pathname);
 	const urlParams = $derived(page.url.searchParams);
+
+	//init client
 	const pb = setPBContext();
+	if (data.racers && data.races && data.racetracks) {
+		setRacersContext(data.racers);
+		setRacesContext(data.races);
+		setRacetracksContext(data.racetracks);
+	}
+
 	const PATHNAME_INDEXES: { [key: string]: number } = {
 		'/': 0,
 		'/races': 1,
@@ -32,51 +48,30 @@
 
 	onMount(async () => {
 		pb.authStore.loadFromCookie(document.cookie);
-		if (pwaInfo) {
-			const { registerSW } = await import('virtual:pwa-register');
-			registerSW({
-				immediate: true,
-				onRegistered(r) {
-					// uncomment following code if you want check for updates
-					// r && setInterval(() => {
-					//    console.log('Checking for sw update')
-					//    r.update()
-					// }, 20000 /* 20s for testing purposes */)
-					console.log(`SW Registered: ${r}`);
-				},
-				onRegisterError(error) {
-					console.log('SW registration error', error);
-				}
-			});
-		}
+		await subscribeToPush();
+		//set theme color (status bar on mobile devices) from base color variable
+		const barColor = window.getComputedStyle(document.body).getPropertyValue('--color-base-200');
+		const themeColor = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement;
+		if (themeColor) themeColor.content = barColor;
 	});
 </script>
 
-<svelte:head>
-	{@html webManifest}
-</svelte:head>
-
-<div class="grid h-full grid-cols-1 grid-rows-[4rem_1fr_4rem]">
-	<div>
-		<Console />
-		{#if !user.options?.raceViewer?.isViewing}
-			{#if data.url !== '/login'}
-				<TopBar />
-			{/if}
-		{/if}
-	</div>
-	{#key data.url}
-		<div
-			transition:fade={{ duration: 300 }}
-			class={user?.options?.raceViewer.isViewing ? 'absolute h-full w-full' : ''}
-		>
-			{@render children()}
+{#if data.url !== '/login' && !user.options?.raceViewer?.isViewing}
+	<div class="grid h-full grid-cols-1 grid-rows-[4rem_1fr_4rem]">
+		<div>
+			<Console />
+			<TopBar />
 		</div>
-	{/key}
-
-	{#if !user?.options?.raceViewer.isViewing}
-		{#if data.url !== '/login'}
-			<BottomBar {url} />
-		{/if}
-	{/if}
-</div>
+		{#key data.url}
+			<div
+				transition:fade={{ duration: 300 }}
+				class={user?.options?.raceViewer.isViewing ? 'absolute h-full w-full' : ''}
+			>
+				{@render children()}
+			</div>
+		{/key}
+		<BottomBar {url} />
+	</div>
+{:else}
+	{@render children()}
+{/if}

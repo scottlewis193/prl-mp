@@ -6,6 +6,7 @@ declare global {
 		interface Locals {
 			pb: import('pocketbase').default;
 			user: import('pocketbase').default['authStore']['record'];
+			clientInit: boolean;
 		}
 		// interface PageData {}
 		// interface PageState {}

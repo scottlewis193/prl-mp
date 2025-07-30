@@ -442,7 +442,8 @@
 </div> -->
 
 {#if isPreview}
-	<img src="preview.png" alt="Preview" />
+	<div>Preview</div>
+	<!-- <img src="preview.png" alt="Preview" /> -->
 {:else}
 	<canvas class="" id="pixi-canvas" bind:this={canvasEl}></canvas>
 {/if}

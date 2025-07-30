@@ -207,10 +207,9 @@ async function importGen1to5RacersToPocketBase() {
 }
 
 export const handle = async ({ event, resolve }) => {
-	console.time('handle');
-
 	//get pb instance
 	event.locals.pb = new PocketBase(PUBLIC_PB_URL);
+
 	// load the store data from the request cookie string
 	event.locals.pb.authStore.loadFromCookie(event.request.headers.get('cookie') || '');
 	try {
@@ -241,6 +240,5 @@ export const handle = async ({ event, resolve }) => {
 		event.locals.pb.authStore.exportToCookie({ sameSite: 'Lax', httpOnly: false })
 	);
 
-	console.timeEnd('handle');
 	return response;
 };

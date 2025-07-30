@@ -4,7 +4,7 @@
 	import { getPBContext } from '$lib/stores/pb.svelte';
 	import { getSymbol, type Racer } from '$lib/stores/racer.svelte';
 	import { getUserContext } from '$lib/stores/user.svelte';
-	import { Chart } from 'chart.js';
+	import Chart from 'chart.js/auto';
 	import { onMount } from 'svelte';
 
 	const { racer }: { racer: Racer | undefined } = $props();
@@ -409,7 +409,9 @@
 				<button class="btn btn-primary w-[50%]">Sell</button>
 			</div>
 		{:else}
-			<p>Select a racer to view details</p>
+			<div class="flex h-full w-full items-center justify-center">
+				<p>Select a racer to view details</p>
+			</div>
 		{/if}
 	</div>
 {/if}

@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { PUBLIC_PB_URL } from '$env/static/public';
 	import { getExchangePageContext } from '$lib/stores/exchange.svelte';
-	import { getSymbol, type Pokemon, type Racer } from '$lib/stores/racer.svelte';
+	import { getRacersContext, getSymbol, type Pokemon, type Racer } from '$lib/stores/racer.svelte';
 	import { Trainer } from '$lib/stores/trainer.svelte';
 	import { getUserContext } from '$lib/stores/user.svelte';
 	import type { Chart } from 'chart.js';
 
-	const { racers }: { racers: Racer[] } = $props();
+	// const { racers }: { racers: Racer[] } = $props();
+
+	const racers = getRacersContext();
 
 	let searchInput: HTMLInputElement;
 	let watchlistCheck: HTMLInputElement;

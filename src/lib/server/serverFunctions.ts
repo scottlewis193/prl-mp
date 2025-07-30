@@ -1,7 +1,7 @@
 import { Race, type RaceType } from '$lib/stores/race.svelte';
 import type { Racer } from '$lib/stores/racer.svelte';
 
-import pb from '../pocketbase';
+import pb from './pocketbase';
 import type { League } from '$lib/stores/league.svelte';
 import type { SHA512_256 } from 'bun';
 import type { EventType } from '$lib/stores/event.svelte';
@@ -31,7 +31,7 @@ export function recordLapTime(racer: Racer, lapNumber: number) {
 	racer.currentRace.lapStartTime = undefined;
 }
 
-export function resolveOvertaking(racers: Racer[], now: number, race: Race) {
+export function resolveOvertaking(racers: Racer[], now: number, race: Race, racetrack: RaceTrack) {
 	const laneSpacing = 0.4; // adjust as needed
 	const cooldown = 1000;
 

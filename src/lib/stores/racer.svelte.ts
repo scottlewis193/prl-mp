@@ -270,9 +270,10 @@ export async function deleteAllRacers() {
 }
 
 export async function getAllRacers() {
-	return (await pb
+	const racers = (await pb
 		.collection('racers')
 		.getFullList({ expand: 'pokemon,trainer,league' })) as Racer[];
+	return racers;
 }
 
 export async function getRacers(raceId: string) {
