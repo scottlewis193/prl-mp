@@ -1,35 +1,36 @@
 <script lang="ts">
 	import { getCameraContext } from '$lib/stores/camera.svelte';
 	import { getCurrentRaceContext } from '$lib/stores/race.svelte';
-	import { getCurrentRacersContext, type Racer, type SortedRacer } from '$lib/stores/racer.svelte';
+	import { getCurrentRacersContext } from '$lib/stores/racer.svelte';
+	import { getCurrentRacetrackContext } from '$lib/stores/racetrack.svelte';
+	import type { Pokemon, Racer, SortedRacer } from '$lib/types';
 	import { onMount } from 'svelte';
 	import { flip } from 'svelte/animate';
-
-	const MAX_RACERS = 20;
 
 	let racers = getCurrentRacersContext();
 	let camera = getCameraContext();
 	const race = getCurrentRaceContext();
-	const checkpoints: { index: number; x: number; y: number }[] = $derived(
-		race.racetrack.checkpoints
-	);
+	const racetrack = getCurrentRacetrackContext();
+
+	const checkpoints: { index: number; x: number; y: number }[] = racetrack.checkpoints;
 
 	const totalTrackLength = Object.values(checkpoints).reduce((sum, point, i) => {
-		const next = race?.racetrack.checkpoints[i + 1] ||
-			race?.racetrack.checkpoints[0] || { x: 0, y: 0 };
+		const next = racetrack.checkpoints[i + 1] || racetrack.checkpoints[0] || { x: 0, y: 0 };
 		const segmentLength = Math.hypot(next.x - point.x, next.y - point.y);
 		return sum + segmentLength;
 	}, 0);
 
 	function estimateTimeBehind(racerA: Racer, racerB: Racer) {
 		if (!race) return 0;
-		const speedA = racerA.pokemon.speed + 50;
-		const speedB = racerB.pokemon.speed + 50;
+		const pokemonA = racerA.expand.pokemon as Pokemon;
+		const pokemonB = racerB.expand.pokemon as Pokemon;
+		const speedA = pokemonA.speed + 50;
+		const speedB = pokemonB.speed + 50;
 
 		const progressA =
-			racerA.currentRace.lapsCompleted * race.racetrack.totalLength + getDistanceAlongTrack(racerA);
+			racerA.currentRace.lapsCompleted * racetrack.totalLength + getDistanceAlongTrack(racerA);
 		const progressB =
-			racerB.currentRace.lapsCompleted * race.racetrack.totalLength + getDistanceAlongTrack(racerB);
+			racerB.currentRace.lapsCompleted * racetrack.totalLength + getDistanceAlongTrack(racerB);
 
 		const deltaDistance = progressB - progressA;
 
@@ -138,11 +139,12 @@
 				</li>
 
 				{#each sortedRacers as racer (racer.id)}
+					{@const pokemon = racer.expand.pokemon as Pokemon}
 					<li
 						class="cursor-pointer"
 						onclick={() => {
 							camera.mode = 'follow';
-							camera.targetRacerId = racer.id;
+							camera.targetRacerId = racer.id || '0';
 						}}
 						animate:flip={{ delay: 200 }}
 					>
@@ -155,7 +157,7 @@
 								{sortedRacers.indexOf(racer) + 1}
 							</div>
 							<div class="pt-[0.1rem]">
-								<img class="rounded-box size-6" src={racer.pokemon.mugshot} />
+								<img class="rounded-box size-6" src={pokemon.mugshot} alt="pokemon-sprite" />
 							</div>
 
 							<div class="flex h-full items-center justify-start">
@@ -241,11 +243,6 @@
 {/if}
 
 <style>
-	.racer-img {
-		-webkit-text-stroke: 1px white;
-		image-rendering: crisp-edges;
-	}
-
 	.racer-entry {
 		transition:
 			transform 0.3s ease,

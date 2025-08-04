@@ -31,6 +31,7 @@
 
 	$effect(() => {
 		if (consoleVisible) {
+			console.log('console visible');
 			consoleInput = document.getElementById('console-input') as HTMLInputElement;
 			consoleInput.focus();
 		}
@@ -38,7 +39,7 @@
 </script>
 
 {#if consoleVisible}
-	<div id="console-container" class="absolute top-0 left-0 z-[1000] flex h-8 w-full">
+	<div id="console-container" class="absolute top-0 left-0 z-[9999] flex h-8 w-full">
 		<label class="input h-full w-full rounded-none border-0 bg-black text-green-500">
 			prl>
 			<input

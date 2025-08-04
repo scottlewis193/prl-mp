@@ -3,11 +3,10 @@
 	import { Application, Assets, Container, Rectangle, Sprite, Texture } from 'pixi.js';
 
 	import { getCameraContext } from '$lib/stores/camera.svelte';
-	import { getCurrentRaceContext, type Race } from '$lib/stores/race.svelte';
-	import { getCurrentRacersContext, type Racer } from '$lib/stores/racer.svelte';
+	import { getCurrentRaceContext } from '$lib/stores/race.svelte';
+	import { getCurrentRacersContext, getPBImageDataUrl } from '$lib/stores/racer.svelte';
 	import { getCurrentRacetrackContext } from '$lib/stores/racetrack.svelte';
-
-	let { tilesetUrl, isPreview = false }: { tilesetUrl: string; isPreview?: boolean } = $props();
+	import type { Racer } from '$lib/types';
 
 	const race = getCurrentRaceContext();
 	const racetrack = getCurrentRacetrackContext();
@@ -47,12 +46,11 @@
 	};
 
 	onMount(async () => {
-		if (isPreview) return;
 		app = new Application();
 
 		await app.init({
 			canvas: canvasEl,
-			resizeTo: isPreview && canvasEl.parentElement ? canvasEl.parentElement : window,
+			resizeTo: canvasEl.parentElement ? canvasEl.parentElement : window,
 			backgroundColor: 0x000000,
 			resolution: window.devicePixelRatio || 1,
 			autoDensity: true,
@@ -61,14 +59,6 @@
 
 		container = new Container();
 		app.stage.addChild(container);
-
-		//set default camera position
-		if (isPreview) {
-			const zoom = (racetrack.data.width - 376 / ((racetrack.data.width + 376) / 2)) / 100;
-
-			camera.zoom = Number(zoom.toFixed(1));
-			updateCamera();
-		}
 
 		//setup track
 		await setupTrack();
@@ -90,7 +80,7 @@
 
 	function addListeners() {
 		console.log('addListeners');
-		if (isPreview) return;
+
 		canvasEl.addEventListener('mousedown', (e) => {
 			if (camera.mode !== 'free') return;
 			isDragging = true;
@@ -250,7 +240,7 @@
 	async function setupTrack() {
 		console.log('setupTrack');
 		const tileset = await Assets.load({
-			src: tilesetUrl,
+			src: '/pokemon_tileset.png',
 			data: { scaleMode: 'nearest', roundPixels: true }
 		});
 		for (const layer of racetrack.data.layers) {
@@ -305,10 +295,22 @@
 			if (!racer.pokemon || !racer.expand.pokemon) {
 				continue;
 			}
+
+			//assign spritesheet and mugshot images
+			racer.expand.pokemon.spriteSheet = await getPBImageDataUrl(
+				racer.expand.pokemon,
+				racer.expand.pokemon.overworldImage
+			);
+			racer.expand.pokemon.mugshot = await getPBImageDataUrl(
+				racer.expand.pokemon,
+				racer.expand.pokemon.leaderboardImage
+			);
+
 			const baseTexture: Texture = await Assets.load({
 				src: racer.expand.pokemon.spriteSheet,
 				data: { scaleMode: 'nearest', roundPixels: true }
 			});
+
 			if (!baseTexture?.source?.resource) {
 				console.warn(`Failed to load sprite sheet for ${racer.expand.pokemon.name}`);
 				continue;
@@ -411,39 +413,4 @@
 	}
 </script>
 
-<!-- {#if Object.values(checkpoints).length > 0}
-	<div class="absolute right-0 bottom-0 z-[10000] float-right text-sm text-white">
-		{racers[0].name}
-		<br />
-		{racers[0]._directionIndex}
-		<br />
-		{racers[0]._frame}
-		<br />
-		{angleTo8DirectionIndex(getAngle(racers[0]))}
-		<br />
-		{((getAngle(racers[0]) * 180) / Math.PI + 360) % 360}
-		<br />
-		{checkpoints[racers[0].checkpointIndex].x + ' ' + checkpoints[racers[0].checkpointIndex].y}
-		<br />
-		{checkpoints[racers[0].checkpointIndex + 1].x +
-			' ' +
-			checkpoints[racers[0].checkpointIndex + 1].y}
-	</div>
-{/if} -->
-
-<!-- <div class="absolute right-6 bottom-6 z-[10000] float-right text-sm text-white">
-	{fps}
-	<br />
-	{touch.pinchStart}
-	<br />
-	{touch.distance}
-	<br />
-	{camera.mode + ' ' + camera.targetRacerId}
-</div> -->
-
-{#if isPreview}
-	<div>Preview</div>
-	<!-- <img src="preview.png" alt="Preview" /> -->
-{:else}
-	<canvas class="" id="pixi-canvas" bind:this={canvasEl}></canvas>
-{/if}
+<canvas class="" id="pixi-canvas" bind:this={canvasEl}></canvas>

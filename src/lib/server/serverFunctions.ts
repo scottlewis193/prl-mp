@@ -1,12 +1,8 @@
-import { Race, type RaceType } from '$lib/stores/race.svelte';
-import type { Racer } from '$lib/stores/racer.svelte';
-
+import type { EventType, Race, Racer, RaceTrack, RaceType } from '$lib/types';
 import pb from './pocketbase';
-import type { League } from '$lib/stores/league.svelte';
+
 import type { SHA512_256 } from 'bun';
-import type { EventType } from '$lib/stores/event.svelte';
-import type { User } from '$lib/stores/user.svelte';
-import type { RaceTrack } from '$lib/stores/racetrack.svelte';
+import { deleteAllRaces } from './races';
 
 export function startLapTimer(racers: Racer[]) {
 	for (const racer of racers) {
@@ -147,22 +143,47 @@ export async function create5DayLeagueEvents() {
 	raceDate.setHours(14, 0, 0, 0);
 
 	let racers = await pb.collection('racers').getFullList({ batch: 1000 });
+	console.log(racers.length);
+
+	//delete races (TEMPORARY)
+	// await deleteAllRaces();
+
+	//set all racers race to null
+	await Promise.all(
+		racers.map(async (racer) => {
+			await pb.collection('racers').update(racer.id, { race: null });
+		})
+	);
+
+	racers = await pb.collection('racers').getFullList({ batch: 1000 });
+	console.log(racers.filter((racer) => racer.race == '').length);
+
 	let leagues = await pb.collection('leagues').getFullList();
 
 	for (let i = 0; i < 5; i++) {
 		let leagueRacesForDay = [];
 		for (const league of leagues) {
-			let leagueRacers = racers.filter((racer) => racer.league === league.id);
+			let leagueRacers = racers.filter((racer) => racer.league === league.id && racer.race == '');
 
 			//create race for league
 			const raceObj: Partial<RaceType> = {
-				name: `League ${league.name} Race`,
+				name: `${league.name} Race ${i}`,
 				status: 'pending',
 				totalLaps: 5,
 				racetrack: '175hl67e5pvjjib'
 			};
 			const leagueRace = await pb.collection('races').create(JSON.parse(JSON.stringify(raceObj)));
 			leagueRacesForDay.push(leagueRace);
+
+			//assign 20 random racers to race
+			for (let j = 0; j < 20; j++) {
+				let randomRacer = leagueRacers[Math.floor(Math.random() * leagueRacers.length)];
+				await pb.collection('racers').update(randomRacer.id, {
+					race: leagueRace.id
+				});
+				racers.splice(racers.indexOf(randomRacer), 1);
+				leagueRacers.splice(leagueRacers.indexOf(randomRacer), 1);
+			}
 		}
 
 		//create event for days races

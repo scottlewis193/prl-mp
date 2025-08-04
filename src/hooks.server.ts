@@ -8,8 +8,7 @@ import { getMugshot, getSpriteSheet } from '$lib/server/pokemon';
 import { DISABLE_AUTH, URL } from '$env/static/private';
 import { PUBLIC_PB_URL } from '$env/static/public';
 import { female, male } from '$lib/server/static/names';
-import { Pokemon, Racer } from '$lib/stores/racer.svelte';
-import { Trainer } from '$lib/stores/trainer.svelte';
+import { Racer, Trainer, type Pokemon } from '$lib/types';
 
 export const init: ServerInit = async () => {
 	startUp();

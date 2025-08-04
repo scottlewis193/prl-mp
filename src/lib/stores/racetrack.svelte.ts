@@ -1,29 +1,6 @@
-// import * as defaultTrackData from './tracks/defaultTrack.json';
-
 import pb from '$lib/pocketbase';
+import type { RaceTrackType } from '$lib/types';
 import { getContext, setContext } from 'svelte';
-
-export type RaceTrackType = {
-	id: string;
-	name: string;
-	checkpoints: { index: number; x: number; y: number }[];
-	data: any;
-	tileset: string;
-	totalLength: number;
-	width: number;
-	maxSize: { x: number; y: number };
-};
-
-export class RaceTrack implements RaceTrackType {
-	id: string = '';
-	name: string = '';
-	data: any = {};
-	checkpoints: { index: number; x: number; y: number }[] = [];
-	tileset: string = '';
-	totalLength: number = 0;
-	width: number = 0;
-	maxSize: { x: number; y: number } = { x: 0, y: 0 };
-}
 
 const defaultCheckpoints = {
 	0: { x: 800, y: 100 },
@@ -38,10 +15,10 @@ const defaultCheckpoints = {
 const racetrackKey = Symbol('racetrack');
 const racetracksKey = Symbol('racetracks');
 
-export function setCurrentRacetrackContext(race: RaceTrackType) {
+export function setCurrentRacetrackContext(race: RaceTrackType | undefined = undefined) {
 	const _racetrack = $state(race);
 
-	return setContext<RaceTrackType>(racetrackKey, _racetrack);
+	return setContext<RaceTrackType | undefined>(racetrackKey, _racetrack);
 }
 
 export function getCurrentRacetrackContext(): RaceTrackType {
@@ -54,10 +31,6 @@ export function getRacetracksContext(): RaceTrackType[] {
 
 export function setRacetracksContext(racetracks: RaceTrackType[]) {
 	return setContext<RaceTrackType[]>(racetracksKey, racetracks);
-}
-
-export async function getAllRacetracks() {
-	return (await pb.collection('racetracks').getFullList()) as RaceTrackType[];
 }
 
 // export const defaultRaceTrack: RaceTrackType = {

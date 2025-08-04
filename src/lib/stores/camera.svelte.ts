@@ -1,15 +1,5 @@
 import { getContext, setContext } from 'svelte';
-import type { Racer } from './racer.svelte';
-
-export interface Camera {
-	mode: 'free' | 'follow';
-	targetRacerId: string | null;
-	x: number;
-	y: number;
-	zoom: number;
-	isPanning: boolean;
-	lastMouse: { x: number; y: number };
-}
+import type { Camera } from '$lib/types';
 
 const defaultCamera: Camera = {
 	mode: 'free',

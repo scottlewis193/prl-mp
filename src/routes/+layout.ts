@@ -1,16 +1,12 @@
-import { getAllRaces } from '$lib/stores/race.svelte';
-import { getAllRacers } from '$lib/stores/racer.svelte';
-import { getAllRacetracks } from '$lib/stores/racetrack.svelte';
 import type { LayoutLoad } from './$types';
 import { browser } from '$app/environment';
-import type { Race } from '$lib/stores/race.svelte';
-import type { Racer } from '$lib/stores/racer.svelte';
-import { RaceTrack } from '$lib/stores/racetrack.svelte';
 import type { AuthRecord } from 'pocketbase';
+import type { Race, Racer, RaceTrack } from '$lib/types';
+import pb from '$lib/pocketbase';
 
 let hasRun = false;
 
-export const load: LayoutLoad = async ({ fetch, depends, url, data }) => {
+export const load: LayoutLoad = async ({ data }) => {
 	let returnData: {
 		races: Race[];
 		racers: Racer[];
@@ -27,9 +23,11 @@ export const load: LayoutLoad = async ({ fetch, depends, url, data }) => {
 
 	if (browser && !hasRun) {
 		hasRun = true;
-		returnData.races = await getAllRaces();
-		returnData.racers = await getAllRacers();
-		returnData.racetracks = await getAllRacetracks();
+		returnData.races = await pb.collection('races').getFullList();
+		returnData.racers = await pb
+			.collection('racers')
+			.getFullList({ batch: 1000, expand: 'pokemon,trainer,league' });
+		returnData.racetracks = await pb.collection('racetracks').getFullList();
 	}
 
 	return returnData;

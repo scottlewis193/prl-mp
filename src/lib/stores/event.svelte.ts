@@ -1,27 +1,6 @@
-import type { Race } from './race.svelte';
+import type { EventType, Race } from '../types';
 import PocketBase from 'pocketbase';
 import pb from '../pocketbase';
-
-export type EventType = {
-	id: string;
-	type: 'DailyLeagueRaces';
-	startTime: Date;
-	raceIds: string[];
-	started: boolean;
-	finished: boolean;
-};
-
-export async function getAllEvents() {
-	return (await pb.collection('events').getFullList()) as EventType[];
-}
-
-export async function updateEvent(id: string, updates: Partial<EventType>) {
-	try {
-		await pb.collection('events').update(id, updates);
-	} catch (error) {
-		console.log('error updating event:', id);
-	}
-}
 
 export async function subscribeToEvents(eventAry: EventType[], pb: PocketBase) {
 	await pb.collection('events').unsubscribe();

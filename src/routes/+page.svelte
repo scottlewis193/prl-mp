@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { beforeNavigate, goto } from '$app/navigation';
-	import { getClientContext } from '$lib/stores/client.svelte';
+
 	import type { AuthRecord } from 'pocketbase';
 
 	let { data }: { data: { user: AuthRecord; url: string } } = $props();
@@ -62,7 +61,7 @@
 			</div>
 		</div>
 	</div>
-	<div class="card bg-base-200 h-full w-full lg:w-[calc(50%-4rem)]">
+	<div class="card bg-base-200 h-full w-full lg:w-[calc(50%-1rem)]">
 		<div class="card-body">News</div>
 	</div>
 </div>

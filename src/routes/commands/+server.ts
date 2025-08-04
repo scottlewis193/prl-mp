@@ -1,4 +1,4 @@
-import { createRace, deleteAllRaces, updateRace } from '$lib/stores/race.svelte';
+import { createRace, deleteAllRaces, updateRace } from '$lib/server/races';
 import { deleteAllRacers, updateRacersByRaceId } from '$lib/stores/racer.svelte';
 import { json, type RequestHandler } from '@sveltejs/kit';
 

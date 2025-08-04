@@ -1,35 +1,21 @@
-import {
-	createRace,
-	deleteAllRaces,
-	getAllRaces,
-	getRunningRaces,
-	subscribeToRaces,
-	updateRace,
-	type Race,
-	type RaceType
-} from '$lib/stores/race.svelte';
-import {
-	deleteAllRacers,
-	getAllRacers,
-	getRacers,
-	subscribeToRacers,
-	updateRacer,
-	type Pokemon,
-	type Racer
-} from '$lib/stores/racer.svelte';
+import { subscribeToRaces } from '$lib/stores/race.svelte';
+
 import { simulateRacer } from './simulateRacer';
 import { EventSource } from 'eventsource';
 
-import { create5DayLeagueEvents, resolveOvertaking, startLapTimer } from './serverFunctions';
+import { create5DayLeagueEvents, resolveOvertaking } from './serverFunctions';
 import pb from './pocketbase';
-import {
-	getAllEvents,
-	subscribeToEvents,
-	updateEvent,
-	type EventType
-} from '$lib/stores/event.svelte';
-import { subscribeToUsers, type User } from '$lib/stores/user.svelte';
-import { getAllRacetracks, RaceTrack } from '$lib/stores/racetrack.svelte';
+
+import { subscribeToUsers } from '$lib/stores/user.svelte';
+
+import type { EventType, Race, Racer, RaceTrack, User } from '$lib/types';
+import { getAllRaces, updateRace } from './races';
+import { getAllRacers, updateRacer } from './racers';
+import { getAllEvents, updateEvent } from './events';
+import { getAllRacetracks } from './racetracks';
+import { subscribeToRacers } from '$lib/stores/racer.svelte';
+import { subscribeToEvents } from '$lib/stores/event.svelte';
+import { getAnimData } from './pokemon';
 
 //const SIM_INTERVAL = 100;
 const SIM_INTERVAL = 500;
@@ -42,10 +28,26 @@ let racetracks: RaceTrack[] = [];
 
 export async function startUp() {
 	console.log('Starting up...');
+	// await create5DayLeagueEvents();
+
 	global.EventSource = EventSource;
 	pb.collection('users').authRefresh();
 
 	racers = await getAllRacers();
+
+	for (const racer of racers) {
+		const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${racer.expand.pokemon?.name}`);
+
+		const data = await response.json();
+		const pokemonDexId = data.id;
+		if (racer.expand.pokemon?.name === 'genesect') {
+			console.log(pokemonDexId);
+		}
+		const animData = await getAnimData(pokemonDexId);
+
+		await pb.collection('pokemon').update(racer?.expand?.pokemon?.id || '0', { animData });
+	}
+
 	races = await getAllRaces();
 	events = await getAllEvents();
 	racetracks = await getAllRacetracks();

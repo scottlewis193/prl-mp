@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { PUBLIC_PB_URL } from '$env/static/public';
 	import { getExchangePageContext } from '$lib/stores/exchange.svelte';
-	import { getRacersContext, getSymbol, type Pokemon, type Racer } from '$lib/stores/racer.svelte';
-	import { Trainer } from '$lib/stores/trainer.svelte';
+	import { getRacersContext, getSymbol } from '$lib/stores/racer.svelte';
+
 	import { getUserContext } from '$lib/stores/user.svelte';
+	import type { Pokemon, Racer, Trainer } from '$lib/types';
 	import type { Chart } from 'chart.js';
 
 	// const { racers }: { racers: Racer[] } = $props();

@@ -1,21 +1,7 @@
 import type { AuthModel, AuthRecord } from 'pocketbase';
 import { getContext, setContext } from 'svelte';
 import PocketBase from 'pocketbase';
-
-export type User = AuthRecord & {
-	id: string;
-	name: string;
-	email: string;
-	avatar: string;
-	options: {
-		raceViewer: {
-			leaderboardMode: 'interval' | 'leader';
-			isViewing: boolean;
-		};
-	};
-	watchlist: string[];
-	isFake: boolean;
-};
+import type { User } from '$lib/types';
 
 const defaultUserOptions: {
 	raceViewer: { leaderboardMode: 'interval' | 'leader'; isViewing: boolean };

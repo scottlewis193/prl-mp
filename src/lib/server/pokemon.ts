@@ -1,6 +1,6 @@
-import { Pokemon } from '$lib/stores/racer.svelte';
 import { existsSync } from 'fs';
 import { JSDOM } from 'jsdom';
+import pb from './pocketbase';
 
 class DOMParser {
 	parseFromString(s: string, contentType = 'text/html') {
@@ -70,13 +70,16 @@ export async function getAnimData(pokemonId: number) {
 		'https://raw.githubusercontent.com/PMDCollab/SpriteCollab/refs/heads/master/sprite/';
 	const formattedId = '0'.repeat(4 - pokemonId.toString().length) + pokemonId.toString();
 	const fullURL = baseURL + formattedId + '/' + 'AnimData.xml';
+
 	if (!isValidHttpUrl(fullURL)) return;
 
 	const animDataJson = await fetch(fullURL)
 		.then((r) => r.text())
 		.then((text) => {
 			try {
-				return xmlToJson(text);
+				const json = xmlToJson(text);
+
+				return json;
 			} catch (error) {
 				console.error('Failed to parse AnimData.xml:', error);
 				return undefined;

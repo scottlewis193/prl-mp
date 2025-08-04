@@ -3,7 +3,9 @@
 	let loading = $state(false);
 
 	let pageState: 'start' | 'login' | 'register' = $state('start');
+	//svelte-ignore non_reactive_update
 	let loginForm: HTMLFormElement;
+	//svelte-ignore non_reactive_update
 	let registerForm: HTMLFormElement;
 </script>
 
