@@ -5,13 +5,19 @@ import type { Handle, ServerInit } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 import pb from '$lib/pocketbase';
 import { getMugshot, getSpriteSheet } from '$lib/server/pokemon';
-import { DISABLE_AUTH, URL } from '$env/static/private';
+import { DISABLE_AUTH } from '$env/static/private';
 import { PUBLIC_PB_URL } from '$env/static/public';
 import { female, male } from '$lib/server/static/names';
 import { Racer, Trainer, type Pokemon } from '$lib/types';
+import { resolvePocketBaseUrl } from '$lib/pocketbase-url';
+import { hasServerCredentials } from '$lib/server/pocketbase';
 
 export const init: ServerInit = async () => {
-	startUp();
+	if (hasServerCredentials) {
+		await startUp();
+	} else {
+		console.info('Background race simulator disabled: PB_USER and PB_PASS are not configured.');
+	}
 
 	//importGen1to5RacersToPocketBase();
 };
@@ -207,7 +213,7 @@ async function importGen1to5RacersToPocketBase() {
 
 export const handle = async ({ event, resolve }) => {
 	//get pb instance
-	event.locals.pb = new PocketBase(PUBLIC_PB_URL);
+	event.locals.pb = new PocketBase(resolvePocketBaseUrl(PUBLIC_PB_URL));
 
 	// load the store data from the request cookie string
 	event.locals.pb.authStore.loadFromCookie(event.request.headers.get('cookie') || '');

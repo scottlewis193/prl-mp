@@ -4,7 +4,7 @@ import { simulateRacer } from './simulateRacer';
 import { EventSource } from 'eventsource';
 
 import { create5DayLeagueEvents, resolveOvertaking } from './serverFunctions';
-import pb from './pocketbase';
+import pb, { authenticateServer } from './pocketbase';
 
 import { subscribeToUsers } from '$lib/stores/user.svelte';
 
@@ -31,7 +31,7 @@ export async function startUp() {
 	// await create5DayLeagueEvents();
 
 	global.EventSource = EventSource;
-	pb.collection('users').authRefresh();
+	await authenticateServer();
 
 	racers = await getAllRacers();
 

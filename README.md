@@ -1,38 +1,44 @@
-# sv
+# Pokemon Racing League
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+## Local setup
 
-## Creating a project
+Install the JavaScript dependencies and the pinned PocketBase server:
 
-If you're seeing this, you've probably already done this step. Congrats!
-
-```bash
-# create a new project in the current directory
-npx sv create
-
-# create a new project in my-app
-npx sv create my-app
+```sh
+npm install
+npm run pb:install
+cp .env.example .env
 ```
 
-## Developing
+Set `PB_USER` and `PB_PASS` in `.env` to create the local service/login user. Set
+`PB_SUPERUSER_EMAIL` and `PB_SUPERUSER_PASS` to create a dashboard account; these are optional for
+the app but required by `npm run pb:check` to inspect the collection schema.
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+Start PocketBase in one terminal. The tracked migrations automatically create all application
+collections on first launch:
 
-```bash
+```sh
+npm run pb
+```
+
+PocketBase runs at `http://127.0.0.1:8090`; its dashboard is at
+`http://127.0.0.1:8090/_/`.
+
+With PocketBase running, verify the migrated schema and relations with:
+
+```sh
+npm run pb:check
+```
+
+Start SvelteKit in another terminal:
+
+```sh
 npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
 ```
 
 ## Building
 
-To create a production version of your app:
-
-```bash
+```sh
+npm run check
 npm run build
 ```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.

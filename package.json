@@ -12,7 +12,9 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"format": "prettier --write .",
 		"lint": "prettier --check .",
-		"pb": "../prl-mp-pb/pocketbase serve",
+		"pb": "node scripts/run-pocketbase.mjs",
+		"pb:install": "sh scripts/install-pocketbase.sh",
+		"pb:check": "node scripts/verify-pocketbase.mjs",
 		"start": "export PORT=5173 && npm install && nodemon ./build",
 		"copy": "scp -r ./build root@192.168.0.2:/mnt/cache/appdata/PRL"
 	},

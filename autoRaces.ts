@@ -1,10 +1,17 @@
 import { v4 as uuid } from 'uuid';
 
+import 'dotenv/config';
 import PocketBase from 'pocketbase';
+import { resolvePocketBaseUrl } from './src/lib/pocketbase-url.js';
 
-const pb = new PocketBase('http://127.0.0.1:8090');
+const pbUrl = resolvePocketBaseUrl(process.env.PUBLIC_PB_URL);
+const pbUser = process.env.PB_USER;
+const pbPass = process.env.PB_PASS;
 
-await pb.collection('users').authWithPassword('sl193@pm.me', 'Drag0n1t3694793!!!');
+if (!pbUser || !pbPass) throw new Error('PB_USER and PB_PASS must be configured');
+
+const pb = new PocketBase(pbUrl);
+await pb.collection('users').authWithPassword(pbUser, pbPass);
 
 // globally disable auto cancellation
 pb.autoCancellation(false);
@@ -30,10 +37,35 @@ async function createRaceIfNeeded() {
 		await pb.collection('racers').create({
 			name,
 			race: newRace.id,
-			checkpointIndex: 0,
-			distanceFromCheckpoint: 0,
-			speed: 50 + Math.random() * 30, // varied speed
-			lastUpdatedAt: new Date().toISOString()
+			stats: {
+				hp: 0,
+				attack: 0,
+				defense: 0,
+				speed: 50 + Math.random() * 30,
+				level: 1,
+				ranking: 0,
+				gender: 'male'
+			},
+			status: { retired: false, injured: false },
+			currentRace: {
+				lapsCompleted: 0,
+				checkpointIndex: 0,
+				distanceFromCheckpoint: 0,
+				lastUpdatedAt: new Date().toISOString(),
+				finished: false,
+				lapTimes: {}
+			},
+			raceHistory: { wins: 0, totalRaces: 0, averageFinishPosition: 0, races: [] },
+			positioning: { x: 0, y: 0, targetTrackOffset: 0 },
+			ownership: { totalShares: 0, shareholders: [] },
+			financials: {
+				totalEarnings: 0,
+				earningsPerShare: 0,
+				issuedShares: 0,
+				outstandingShares: 0,
+				currentSharePrice: 0,
+				priceHistory: []
+			}
 		});
 	}
 

@@ -18,6 +18,11 @@ Thumbs.db
 !.env.example
 !.env.test
 
+# PocketBase runtime (schema migrations remain tracked)
+/pocketbase/pocketbase
+/pocketbase/pb_data/
+/pocketbase/pb_public/
+
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
