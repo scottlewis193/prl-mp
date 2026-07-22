@@ -1,6 +1,7 @@
 import { subscribeToRaces } from '$lib/stores/race.svelte';
 
 import { simulateRacer } from './simulateRacer';
+import { shouldFinishRace } from './raceCompletion';
 import { EventSource } from 'eventsource';
 
 import { create5DayLeagueEvents, resolveOvertaking } from './serverFunctions';
@@ -9,7 +10,7 @@ import pb, { authenticateServer } from './pocketbase';
 import { subscribeToUsers } from '$lib/stores/user.svelte';
 
 import type { EventType, Race, Racer, RaceTrack, User } from '$lib/types';
-import { getAllRaces, updateRace } from './races';
+import { getAllRaces, startRace, updateRace } from './races';
 import { getAllRacers, updateRacer } from './racers';
 import { getAllEvents, updateEvent } from './events';
 import { getAllRacetracks } from './racetracks';
@@ -82,6 +83,10 @@ async function simulateRaces() {
 
 		const raceRacers = racers.filter((r) => r.race === race.id);
 		const racetrack = racetracks.find((track) => track.id === race.racetrack) || racetracks[0];
+		if (!racetrack || racetrack.checkpoints.length < 2) {
+			console.error(`Cannot simulate race "${race.name}": its racetrack has fewer than two checkpoints.`);
+			continue;
+		}
 
 		let raceChanged = false;
 		const now = Date.now();
@@ -97,7 +102,7 @@ async function simulateRaces() {
 					x,
 					y,
 					finished
-				} = simulateRacer(racer, race, now, race.totalLaps);
+				} = simulateRacer(racer, racetrack, now, race.totalLaps);
 
 				// Update racer state
 				racer.currentRace.checkpointIndex = checkpointIndex;
@@ -125,7 +130,7 @@ async function simulateRaces() {
 		resolveOvertaking(raceRacers, now, race, racetrack);
 
 		// If all racers finished, mark race as finished
-		if (raceRacers.every((r) => r.currentRace.finished)) {
+		if (shouldFinishRace(raceRacers)) {
 			race.status = 'finished';
 			raceChanged = true;
 		}
@@ -157,7 +162,7 @@ async function simulateEvents() {
 				eventRaces.map(async (race) => {
 					//update races which have not started yet and past the start time
 					if (race.status == 'pending' && race.startTime.getUTCMilliseconds() <= now) {
-						await updateRace(race.id || '0', { status: 'running', startTime: new Date() });
+					await startRace(race.id || '0');
 					}
 				})
 			);

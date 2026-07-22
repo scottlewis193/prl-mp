@@ -13,8 +13,8 @@ export type RaceType = {
 };
 
 export class Race implements RaceType {
-	id: string = '0';
-	name: string = '';
+	id?: string;
+	name: string = 'New Race';
 	status: 'pending' | 'countdown' | 'running' | 'finished' | 'cancelled' | 'settled' = 'pending';
 	racetrack: string = '175hl67e5pvjjib';
 	winner: string = '';

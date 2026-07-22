@@ -1,5 +1,6 @@
 import PocketBase from 'pocketbase';
 import pb from '../pocketbase';
+import { applyRacerUpdate } from '$lib/racerUpdates';
 
 import { getContext, setContext } from 'svelte';
 
@@ -7,10 +8,9 @@ import type { Pokemon, Racer } from '$lib/types';
 
 const racersKey = Symbol('racers');
 const currentRacersKey = Symbol('currentRacers');
-let _racers: Racer[] = $state([]);
 export function setRacersContext(racers: Racer[]) {
-	_racers = racers;
-	return setContext<Racer[]>(racersKey, _racers);
+	const racersState: Racer[] = $state(racers);
+	return setContext<Racer[]>(racersKey, racersState);
 }
 
 export function getRacersContext(): Racer[] {
@@ -37,8 +37,8 @@ export async function subscribeToRacers(racersAry: Racer[], pb: PocketBase) {
 				case 'create':
 					racersAry.push(racerRecord);
 					break;
-				case 'update':
-					updateRacerOnScreen(racerRecord);
+			case 'update':
+				applyRacerUpdate(racersAry, racerRecord);
 
 					break;
 				case 'delete':
@@ -51,30 +51,6 @@ export async function subscribeToRacers(racersAry: Racer[], pb: PocketBase) {
 		},
 		{ expand: 'pokemon' }
 	);
-}
-
-function updateRacerOnScreen(updated: Racer) {
-	const i = _racers.findIndex((r) => r.id === updated.id);
-
-	if (i === -1) {
-		_racers.push(updated);
-	} else {
-		if (_racers[i] === _racers[0]) {
-			// console.log(_racers[i], updated);
-		}
-
-		Object.assign(_racers[i], updated);
-
-		const now = performance.now();
-
-		//interpolation
-		_racers[i]._lastTargetX = _racers[i]._targetX;
-		_racers[i]._lastTargetY = _racers[i]._targetY;
-		_racers[i]._targetX = updated.positioning.x;
-		_racers[i]._targetY = updated.positioning.y;
-		_racers[i]._interpStartTime = now;
-		_racers[i]._interpDuration = 500; // milliseconds
-	}
 }
 
 export async function unsubscribeFromRacers(pb: PocketBase) {

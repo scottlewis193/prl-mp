@@ -1,14 +1,20 @@
-import type { Race } from '$lib/stores/race.svelte';
-import type { Racer } from '$lib/stores/racer.svelte';
-import { recordLapTime, startLapTimer } from './serverFunctions';
+import type { Racer, RaceTrack } from '$lib/types';
+import { recordLapTime, startLapTimer } from './lapTiming';
 
 const collisionThreshold = 64; // collision radius
 
-export function simulateRacer(racer: Racer, race: Race, now = Date.now(), totalLaps = 10) {
-	const elapsed = (now - new Date(racer.currentRace.lastUpdatedAt).getTime()) / 1000;
+export function simulateRacer(
+	racer: Racer,
+	racetrack: RaceTrack,
+	now = Date.now(),
+	totalLaps = 10
+) {
+	const lastUpdatedAt = Date.parse(racer.currentRace.lastUpdatedAt);
+	const elapsed = Number.isFinite(lastUpdatedAt) ? Math.max(0, (now - lastUpdatedAt) / 1000) : 0;
 
 	// Determine current speed
-	if (!racer.pokemon) {
+	const pokemon = racer.expand.pokemon;
+	if (!pokemon) {
 		return {
 			checkpointIndex: 0,
 			distanceFromCheckpoint: 0,
@@ -20,8 +26,8 @@ export function simulateRacer(racer: Racer, race: Race, now = Date.now(), totalL
 		};
 	}
 	const speed = racer.currentRace.finished
-		? racer.pokemon.speed / 7
-		: racer.pokemon.speed + racer.stats.speed;
+		? pokemon.speed / 7
+		: pokemon.speed + racer.stats.speed;
 
 	// Total distance to travel this tick
 	let distanceToTravel = racer.currentRace.distanceFromCheckpoint + speed * elapsed;
@@ -29,8 +35,8 @@ export function simulateRacer(racer: Racer, race: Race, now = Date.now(), totalL
 	let checkpointIndex = racer.currentRace.checkpointIndex;
 	let lapsCompleted = racer.currentRace.lapsCompleted;
 
-	const checkpoints = race.racetrack.checkpoints;
-	const trackWidth = race.racetrack.width || 64;
+	const checkpoints = racetrack.checkpoints;
+	const trackWidth = racetrack.width || 64;
 
 	// Move through segments as needed
 	while (distanceToTravel > 0) {

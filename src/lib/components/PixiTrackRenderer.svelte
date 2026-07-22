@@ -6,6 +6,7 @@
 	import { getCurrentRaceContext } from '$lib/stores/race.svelte';
 	import { getCurrentRacersContext, getPBImageDataUrl } from '$lib/stores/racer.svelte';
 	import { getCurrentRacetrackContext } from '$lib/stores/racetrack.svelte';
+	import { getWalkSpriteUrl } from '$lib/pokemonSpriteUrl';
 	import type { Racer } from '$lib/types';
 
 	const race = getCurrentRaceContext();
@@ -296,23 +297,25 @@
 				continue;
 			}
 
-			//assign spritesheet and mugshot images
-			racer.expand.pokemon.spriteSheet = await getPBImageDataUrl(
-				racer.expand.pokemon,
-				racer.expand.pokemon.overworldImage
-			);
-			racer.expand.pokemon.mugshot = await getPBImageDataUrl(
-				racer.expand.pokemon,
-				racer.expand.pokemon.leaderboardImage
-			);
+			const pokemon = racer.expand.pokemon;
+			const bundledSprite = getWalkSpriteUrl(pokemon);
+			const spriteSheet =
+				bundledSprite ?? (await getPBImageDataUrl(pokemon, pokemon.overworldImage));
+			pokemon.spriteSheet = spriteSheet;
 
-			const baseTexture: Texture = await Assets.load({
-				src: racer.expand.pokemon.spriteSheet,
-				data: { scaleMode: 'nearest', roundPixels: true }
-			});
+			let baseTexture: Texture;
+			try {
+				baseTexture = await Assets.load({
+					src: spriteSheet,
+					data: { scaleMode: 'nearest', roundPixels: true }
+				});
+			} catch (error) {
+				console.warn(`Failed to load sprite sheet for ${pokemon.name}`, error);
+				continue;
+			}
 
 			if (!baseTexture?.source?.resource) {
-				console.warn(`Failed to load sprite sheet for ${racer.expand.pokemon.name}`);
+				console.warn(`Failed to load sprite sheet for ${pokemon.name}`);
 				continue;
 			}
 			const anim = getAnim(racer, 'Walk');

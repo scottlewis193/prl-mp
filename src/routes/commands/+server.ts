@@ -1,5 +1,5 @@
-import { createRace, deleteAllRaces, updateRace } from '$lib/server/races';
-import { deleteAllRacers, updateRacersByRaceId } from '$lib/stores/racer.svelte';
+import { createUnassignedRacers, deleteAllRacers } from '$lib/server/racers';
+import { createRace, deleteAllRaces, startRace } from '$lib/server/races';
 import { json, type RequestHandler } from '@sveltejs/kit';
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -15,20 +15,26 @@ export const POST: RequestHandler = async ({ request }) => {
 	const params = command.split(' ').slice(1);
 
 	switch (actualCommand) {
+		case '/createracers':
+			const createdRacers = await createUnassignedRacers();
+			returnData.message =
+				createdRacers > 0
+					? `Created ${createdRacers} unassigned racers`
+					: 'Racers already exist; no duplicate racers were created';
+			return json(returnData);
 		case '/createrace':
-			//since we are creating a new race, we need to clear the clients racers and race data
-			const race = await createRace();
-
-			// await createDefaultRacers(race);
+			const { race, racerCount } = await createRace();
+			returnData.message = `Created race ${race.id} with ${racerCount} unassigned racers`;
 			return json(returnData);
 		case '/startrace':
 			if (params.length === 0) {
 				returnData.message = 'No race ID provided';
 				return json(returnData);
 			}
-			await updateRace(params[0], { status: 'running' });
-			//we need to update the lastUpdatedAt before starting the race else the racers will end up in weird positions when the simulation starts
-			// await updateRacersByRaceId(params[0], { lastUpdatedAt: new Date().toISOString() });
+			if (!(await startRace(params[0]))) {
+				returnData.message = 'Cannot start a race with no racers assigned';
+				return json(returnData, { status: 400 });
+			}
 			return json(returnData);
 		case '/deleteallraces':
 			await deleteAllRaces();

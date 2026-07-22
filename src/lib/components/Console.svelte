@@ -73,7 +73,8 @@
 				}}
 			/>
 			<datalist id="commands">
-				<option>/createrace - Creates a pending race and associated racers &#8291;</option>
+				<option>/createracers - Recreates unassigned racers from seeded Pokémon and trainers &#8291;</option>
+				<option>/createrace - Creates a pending race with unassigned racers &#8291;</option>
 				<option>/deleteallraces - Deletes all races and racers &#8291;</option>
 				<option>/startrace [raceId] - Starts a race (sets status to 'running') &#8291;</option>
 			</datalist>

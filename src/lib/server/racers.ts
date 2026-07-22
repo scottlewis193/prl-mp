@@ -1,5 +1,7 @@
-import type { Racer } from '$lib/types';
+import type { Pokemon, Racer, Trainer } from '$lib/types';
 import pb from './pocketbase';
+import { selectUnassignedRacers } from './racerAssignment';
+import { selectRacerGender, selectRacerName } from './racerNames';
 
 // import { createRandomPokemon } from './pokemon';
 
@@ -35,6 +37,70 @@ export async function getRacers(raceId: string) {
 	return (await pb.collection('racers').getFullList({
 		filter: `race = "${raceId}"`
 	})) as Racer[];
+}
+
+export async function getUnassignedRacers() {
+	const racers = (await pb.collection('racers').getFullList({
+		filter: 'race = ""'
+	})) as Racer[];
+
+	return selectUnassignedRacers(racers);
+}
+
+export async function createUnassignedRacers() {
+	if ((await getAllRacers()).length > 0) {
+		return 0;
+	}
+
+	const [pokemon, trainers] = await Promise.all([
+		pb.collection('pokemon').getFullList() as Promise<Pokemon[]>,
+		pb.collection('trainers').getFullList() as Promise<Trainer[]>
+	]);
+	const racerCount = Math.min(pokemon.length, trainers.length);
+
+	const created = await Promise.all(
+		Array.from({ length: racerCount }, (_, index) => {
+			const pokemonEntry = pokemon[index];
+			const trainer = trainers[index];
+			const gender = selectRacerGender();
+			return pb.collection('racers').create({
+				name: selectRacerName(gender),
+				trainer: trainer.id,
+				pokemon: pokemonEntry.id,
+				stats: {
+					hp: pokemonEntry.hp,
+					attack: pokemonEntry.attack,
+					defense: pokemonEntry.defense,
+					speed: pokemonEntry.speed,
+					level: 1,
+					ranking: index + 1,
+					gender
+				},
+				status: { retired: false, injured: false },
+				currentRace: {
+					lapsCompleted: 0,
+					checkpointIndex: 0,
+					distanceFromCheckpoint: 0,
+					lastUpdatedAt: '',
+					finished: false,
+					lapTimes: {}
+				},
+				raceHistory: { wins: 0, totalRaces: 0, averageFinishPosition: 0, races: [] },
+				positioning: { x: 0, y: 0, trackOffset: 0, targetTrackOffset: 0 },
+				ownership: { totalShares: 1000, shareholders: [] },
+				financials: {
+					totalEarnings: 0,
+					earningsPerShare: 0,
+					issuedShares: 1000,
+					outstandingShares: 1000,
+					currentSharePrice: 10,
+					priceHistory: []
+				}
+			});
+		})
+	);
+
+	return created.length;
 }
 
 export async function updateRacer(racerId: string, updates: Partial<Racer>): Promise<boolean> {

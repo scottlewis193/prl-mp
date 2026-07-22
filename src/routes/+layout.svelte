@@ -5,8 +5,8 @@
 	import TopBar from '$lib/components/TopBar.svelte';
 	import '$lib/pwa.ts';
 	import { setPBContext } from '$lib/stores/pb.svelte';
-	import { setRacesContext } from '$lib/stores/race.svelte';
-	import { setRacersContext } from '$lib/stores/racer.svelte';
+	import { getRacesContext, setRacesContext, subscribeToRaces } from '$lib/stores/race.svelte';
+	import { getRacersContext, setRacersContext, subscribeToRacers } from '$lib/stores/racer.svelte';
 	import { setRacetracksContext } from '$lib/stores/racetrack.svelte';
 
 	import { subscribeToPush } from '$lib/subscribe';
@@ -30,6 +30,10 @@
 
 	onMount(async () => {
 		pb.authStore.loadFromCookie(document.cookie);
+		await Promise.all([
+			subscribeToRaces(getRacesContext(), pb),
+			subscribeToRacers(getRacersContext(), pb)
+		]);
 		await subscribeToPush();
 		//set theme color (status bar on mobile devices) from base color variable
 		const barColor = window.getComputedStyle(document.body).getPropertyValue('--color-base-200');

@@ -3,6 +3,7 @@
 	import { getCurrentRaceContext } from '$lib/stores/race.svelte';
 	import { getCurrentRacersContext } from '$lib/stores/racer.svelte';
 	import { getCurrentRacetrackContext } from '$lib/stores/racetrack.svelte';
+	import { getLeaderboardSpriteUrl } from '$lib/pokemonSpriteUrl';
 	import type { Pokemon, Racer, SortedRacer } from '$lib/types';
 	import { onMount } from 'svelte';
 	import { flip } from 'svelte/animate';
@@ -157,7 +158,11 @@
 								{sortedRacers.indexOf(racer) + 1}
 							</div>
 							<div class="pt-[0.1rem]">
-								<img class="rounded-box size-6" src={pokemon.mugshot} alt="pokemon-sprite" />
+								<img
+									class="rounded-box size-6"
+									src={getLeaderboardSpriteUrl(pokemon)}
+									alt={`${pokemon.name} portrait`}
+								/>
 							</div>
 
 							<div class="flex h-full items-center justify-start">

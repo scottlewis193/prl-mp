@@ -1,31 +1,9 @@
 import type { EventType, Race, Racer, RaceTrack, RaceType } from '$lib/types';
 import pb from './pocketbase';
+export { recordLapTime, startLapTimer } from './lapTiming';
 
 import type { SHA512_256 } from 'bun';
 import { deleteAllRaces } from './races';
-
-export function startLapTimer(racers: Racer[]) {
-	for (const racer of racers) {
-		//init lap timer
-		if (!racer.currentRace.lapStartTime) {
-			racer.currentRace.lapStartTime = Date.now() / 1000;
-		}
-	}
-}
-
-export function recordLapTime(racer: Racer, lapNumber: number) {
-	if (!racer.currentRace.lapStartTime) {
-		return;
-	}
-	const lapTime = Number((Date.now() / 1000 - racer.currentRace.lapStartTime).toFixed(3));
-
-	racer.currentRace.lapTimes[lapNumber] = lapTime;
-	racer.currentRace.bestLapTime =
-		racer.currentRace.bestLapTime !== undefined && racer.currentRace.bestLapTime !== 0
-			? Math.min(racer.currentRace.bestLapTime, lapTime)
-			: lapTime;
-	racer.currentRace.lapStartTime = undefined;
-}
 
 export function resolveOvertaking(racers: Racer[], now: number, race: Race, racetrack: RaceTrack) {
 	const laneSpacing = 0.4; // adjust as needed
