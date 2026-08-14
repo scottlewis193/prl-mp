@@ -21,6 +21,7 @@ export async function createRace() {
 					lapsCompleted: 0,
 					lastUpdatedAt: '',
 					finished: false,
+					finishedAt: undefined,
 					lapStartTime: undefined,
 					lapTimes: {},
 					bestLapTime: undefined
@@ -46,6 +47,21 @@ export async function getRunningRaces() {
 	return (await pb.collection('races').getFullList({
 		filter: 'status = "running"'
 	})) as Race[];
+}
+
+export async function getFinishedRaces() {
+	return (await pb.collection('races').getFullList({
+		filter: 'status = "finished"'
+	})) as Race[];
+}
+
+export async function settleRace(raceId: string): Promise<boolean> {
+	const response = (await pb.send('/api/prl/races/settle', {
+		method: 'POST',
+		body: { raceId }
+	})) as { settled: boolean };
+
+	return response.settled;
 }
 
 export async function getAllRaces() {
@@ -76,7 +92,12 @@ export async function startRace(raceId: string, startedAt = new Date()): Promise
 	const racerUpdates = await Promise.all(
 		raceRacers.map((racer) =>
 			updateRacer(racer.id || '0', {
-				currentRace: { ...racer.currentRace, lastUpdatedAt, finished: false }
+				currentRace: {
+					...racer.currentRace,
+					lastUpdatedAt,
+					finished: false,
+					finishedAt: undefined
+				}
 			})
 		)
 	);

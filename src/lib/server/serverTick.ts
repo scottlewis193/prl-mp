@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
 import type { Race, Racer, RaceTrack } from '$lib/types';
-import { shouldFinishRace } from './raceCompletion';
+import { buildRaceCompletion, shouldFinishRace } from './raceCompletion';
 import { getRacers } from './racers';
-import { getRunningRaces } from './races';
+import { getFinishedRaces, getRunningRaces, settleRace } from './races';
 import { getAllRacetracks } from './racetracks';
 import { resolveOvertaking } from './serverFunctions';
 import { simulateRacer } from './simulateRacer';
@@ -49,7 +49,24 @@ async function serverTick(): Promise<void> {
 	let lease = await claimSimulatorLease(ownerId, LEASE_TTL_MS);
 	if (!lease) return;
 
-	const [races, racetracks] = await Promise.all([getRunningRaces(), getAllRacetracks()]);
+	const [races, finishedRaces, racetracks] = await Promise.all([
+		getRunningRaces(),
+		getFinishedRaces(),
+		getAllRacetracks()
+	]);
+	for (const race of finishedRaces) {
+		if (!race.id) continue;
+		try {
+			await settleRace(race.id);
+		} catch (error) {
+			console.error('Background race settlement failed.', {
+				ownerId,
+				raceId: race.id,
+				raceName: race.name,
+				error
+			});
+		}
+	}
 	for (const race of races) {
 		try {
 			lease = await claimSimulatorLease(ownerId, LEASE_TTL_MS);
@@ -104,7 +121,7 @@ async function simulateRace(
 		}
 
 		const now = Date.now();
-		let raceChanged = false;
+		const finishedAt = new Date(now).toISOString();
 		for (const racer of racers) {
 			const simulated = simulateRacer(racer, racetrack, now, race.totalLaps);
 			Object.assign(racer.currentRace, {
@@ -119,23 +136,20 @@ async function simulateRace(
 
 			if (simulated.finished && !racer.currentRace.finished) {
 				racer.currentRace.finished = true;
-				if (!racers.some((other) => other.currentRace.finished && other.id !== racer.id)) {
-					race.winner = racer.id ?? '';
-					raceChanged = true;
-					console.info('Race winner recorded.', {
-						ownerId,
-						raceId: race.id,
-						racerId: racer.id,
-						racerName: racer.name
-					});
-				}
+				racer.currentRace.finishedAt = finishedAt;
 			}
 		}
 
 		resolveOvertaking(racers, now, race, racetrack);
+		let raceUpdate;
 		if (shouldFinishRace(racers)) {
-			race.status = 'finished';
-			raceChanged = true;
+			raceUpdate = buildRaceCompletion(race.id, racers, finishedAt);
+			console.info('Race completion recorded.', {
+				ownerId,
+				raceId: race.id,
+				winner: raceUpdate.winner,
+				endTime: raceUpdate.endTime
+			});
 		}
 
 		const renewed = await claimSimulatorLease(lease.ownerId, LEASE_TTL_MS);
@@ -143,11 +157,7 @@ async function simulateRace(
 		lease.token = renewed.token;
 
 		const racerUpdates = racers.map(toSimulationUpdate);
-		const committed = await commitRaceSimulation(
-			lease,
-			racerUpdates,
-			raceChanged ? { id: race.id, status: race.status, winner: race.winner } : undefined
-		);
+		const committed = await commitRaceSimulation(lease, racerUpdates, raceUpdate);
 		if (!committed) {
 			console.warn('Race simulation commit rejected because ownership changed.', {
 				ownerId: lease.ownerId,

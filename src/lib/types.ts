@@ -7,6 +7,7 @@ export type RaceType = {
 	status: 'pending' | 'countdown' | 'running' | 'finished' | 'cancelled' | 'settled';
 	racetrack: string;
 	winner: string;
+	finishingOrder: string[];
 	startTime: Date;
 	endTime: Date;
 	totalLaps: number;
@@ -18,6 +19,7 @@ export class Race implements RaceType {
 	status: 'pending' | 'countdown' | 'running' | 'finished' | 'cancelled' | 'settled' = 'pending';
 	racetrack: string = '175hl67e5pvjjib';
 	winner: string = '';
+	finishingOrder: string[] = [];
 	startTime: Date = new Date();
 	totalLaps: number = 99;
 	endTime: Date = new Date();
@@ -61,6 +63,7 @@ type RacerType = {
 		distanceFromCheckpoint: number;
 		lastUpdatedAt: string;
 		finished: boolean;
+		finishedAt?: string;
 		lapStartTime?: number;
 		lapTimes: { [lapNumber: number]: number };
 		bestLapTime?: number;
@@ -179,6 +182,7 @@ export class Racer implements RacerType {
 		distanceFromCheckpoint: number;
 		lastUpdatedAt: string;
 		finished: boolean;
+		finishedAt?: string;
 		lapStartTime?: number;
 		lapTimes: { [lapNumber: number]: number };
 		bestLapTime?: number;

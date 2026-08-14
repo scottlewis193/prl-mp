@@ -12,6 +12,10 @@ export type RacerSimulationUpdate = Pick<Racer, 'currentRace' | 'positioning' | 
 	id: string;
 };
 
+export type RaceSimulationUpdate = Pick<Race, 'id' | 'status' | 'winner' | 'finishingOrder'> & {
+	endTime?: string;
+};
+
 export async function claimSimulatorLease(
 	ownerId: string,
 	ttlMs: number
@@ -29,7 +33,7 @@ export async function claimSimulatorLease(
 export async function commitRaceSimulation(
 	lease: SimulatorLeaseGrant,
 	racerUpdates: RacerSimulationUpdate[],
-	raceUpdate?: Pick<Race, 'id' | 'status' | 'winner'>
+	raceUpdate?: RaceSimulationUpdate
 ): Promise<boolean> {
 	const response = (await pb.send('/api/prl/simulator/commit', {
 		method: 'POST',

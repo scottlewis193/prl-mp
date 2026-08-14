@@ -24,6 +24,7 @@ const race: Race = {
 	status: 'running',
 	racetrack: racetrack.id,
 	winner: '',
+	finishingOrder: [],
 	startTime: new Date(0),
 	endTime: new Date(0),
 	totalLaps: 1

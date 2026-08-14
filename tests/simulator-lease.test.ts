@@ -49,6 +49,13 @@ async function commit(
 	}) as Promise<{ committed: boolean }>;
 }
 
+async function settle(client: PocketBase, raceId: string) {
+	return client.send('/api/prl/races/settle', {
+		method: 'POST',
+		body: { raceId }
+	}) as Promise<{ settled: boolean }>;
+}
+
 before(async () => {
 	dataDirectory = await mkdtemp(join(tmpdir(), 'prl-simulator-test-'));
 	const port = 18_000 + Math.floor(Math.random() * 10_000);
@@ -138,4 +145,82 @@ test('excludes concurrent owners and permits recovery after the lease expires', 
 	const persistedRacer = await secondWorker.collection('racers').getOne(racer.id);
 	assert.equal(persistedRacer.currentRace.distanceFromCheckpoint, 222);
 	assert.equal(persistedRacer.positioning.x, 222);
+});
+
+test('settles a finished race atomically and remains unchanged when settlement is retried', async () => {
+	const raceId = 'prlseedrace0001';
+	const finishedAt = '2026-08-14T12:00:08.000Z';
+	const racers = await firstWorker.collection('racers').getFullList({
+		filter: `race = "${raceId}"`,
+		sort: 'id'
+	});
+	await Promise.all(
+		racers.map((racer, index) =>
+			firstWorker.collection('racers').update(racer.id, {
+				currentRace: {
+					...racer.currentRace,
+					finished: true,
+					finishedAt: new Date(
+						Date.parse(finishedAt) - (racers.length - index) * 1000
+					).toISOString()
+				}
+			})
+		)
+	);
+	await firstWorker.collection('races').update(raceId, {
+		status: 'finished',
+		winner: '',
+		endTime: finishedAt
+	});
+	const finishedRacers = await firstWorker.collection('racers').getFullList({
+		filter: `race = "${raceId}"`,
+		sort: 'id'
+	});
+	assert.equal(
+		finishedRacers.every(
+			(racer) => racer.currentRace.finished && typeof racer.currentRace.finishedAt === 'string'
+		),
+		true
+	);
+
+	assert.deepEqual(await settle(firstWorker, raceId), { settled: true });
+
+	const settledRace = await firstWorker.collection('races').getOne(raceId);
+	const settledRacers = await firstWorker.collection('racers').getFullList({ sort: 'id' });
+	assert.equal(settledRace.status, 'settled');
+	assert.equal(settledRace.winner, racers[0].id);
+	assert.deepEqual(
+		settledRace.finishingOrder,
+		racers.map((racer) => racer.id)
+	);
+	assert.equal(settledRace.endTime, finishedAt.replace('T', ' '));
+	assert.equal(
+		settledRacers.every((racer) => racer.race === ''),
+		true
+	);
+	assert.deepEqual(
+		settledRacers.map((racer) => ({
+			position: racer.raceHistory.races.at(-1)?.position,
+			prizeMoney: racer.raceHistory.races.at(-1)?.prizeMoney,
+			totalRaces: racer.raceHistory.totalRaces,
+			wins: racer.raceHistory.wins,
+			ranking: racer.stats.ranking,
+			totalEarnings: racer.financials.totalEarnings
+		})),
+		Array.from({ length: racers.length }, (_, index) => ({
+			position: index + 1,
+			prizeMoney: racers.length - index,
+			totalRaces: 1,
+			wins: index === 0 ? 1 : 0,
+			ranking: index + 1,
+			totalEarnings: racers.length - index
+		}))
+	);
+
+	const beforeRetry = JSON.stringify(settledRacers);
+	assert.deepEqual(await settle(secondWorker, raceId), { settled: false });
+	assert.equal(
+		JSON.stringify(await secondWorker.collection('racers').getFullList({ sort: 'id' })),
+		beforeRetry
+	);
 });
