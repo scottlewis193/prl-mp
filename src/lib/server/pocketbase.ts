@@ -11,6 +11,7 @@ export const hasServerCredentials = Boolean(PB_USER && PB_PASS);
 
 export async function authenticateServer(): Promise<void> {
 	if (!hasServerCredentials) return;
+	if (pb.authStore.isValid) return;
 
 	await pb.collection('users').authWithPassword(PB_USER, PB_PASS);
 }

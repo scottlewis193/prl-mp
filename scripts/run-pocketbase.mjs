@@ -23,7 +23,8 @@ const commandArgs = args.length
 			'serve',
 			'--http=127.0.0.1:8090',
 			`--dir=${resolve(projectDirectory, 'pocketbase/pb_data')}`,
-			`--migrationsDir=${resolve(projectDirectory, 'pocketbase/pb_migrations')}`
+			`--migrationsDir=${resolve(projectDirectory, 'pocketbase/pb_migrations')}`,
+			`--hooksDir=${resolve(projectDirectory, 'pocketbase/pb_hooks')}`
 		];
 
 const child = spawn(binary, commandArgs, {

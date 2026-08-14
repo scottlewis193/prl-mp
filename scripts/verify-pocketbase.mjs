@@ -23,6 +23,7 @@ const expectedCollections = [
 	'racers',
 	'races',
 	'racetracks',
+	'simulator_leases',
 	'subscriptions',
 	'trainers',
 	'users'

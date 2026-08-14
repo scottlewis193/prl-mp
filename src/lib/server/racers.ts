@@ -32,7 +32,8 @@ export async function getAllRacers() {
 
 export async function getRacers(raceId: string) {
 	return (await pb.collection('racers').getFullList({
-		filter: `race = "${raceId}"`
+		filter: `race = "${raceId}"`,
+		expand: 'pokemon,trainer,league'
 	})) as Racer[];
 }
 

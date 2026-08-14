@@ -72,3 +72,14 @@ test('initialises a racer with no race timestamp before calculating movement', (
 	assert.equal(movingState.x, 5);
 	assert.equal(movingState.y, 0);
 });
+
+test('caps elapsed movement when resuming a racer after a service restart', () => {
+	const staleRacer = structuredClone(racer);
+	staleRacer.currentRace.lastUpdatedAt = new Date(0).toISOString();
+
+	const resumedState = simulateRacer(staleRacer, racetrack, 60_000, race.totalLaps);
+
+	assert.equal(resumedState.distanceFromCheckpoint, 10);
+	assert.equal(resumedState.x, 10);
+	assert.equal(resumedState.lastUpdatedAt, new Date(60_000).toISOString());
+});

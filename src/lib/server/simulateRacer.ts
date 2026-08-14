@@ -2,6 +2,7 @@ import type { Racer, RaceTrack } from '$lib/types';
 import { recordLapTime, startLapTimer } from './lapTiming';
 
 const collisionThreshold = 64; // collision radius
+const MAX_ELAPSED_SECONDS = 1;
 
 export function simulateRacer(
 	racer: Racer,
@@ -10,7 +11,9 @@ export function simulateRacer(
 	totalLaps = 10
 ) {
 	const lastUpdatedAt = Date.parse(racer.currentRace.lastUpdatedAt);
-	const elapsed = Number.isFinite(lastUpdatedAt) ? Math.max(0, (now - lastUpdatedAt) / 1000) : 0;
+	const elapsed = Number.isFinite(lastUpdatedAt)
+		? Math.min(MAX_ELAPSED_SECONDS, Math.max(0, (now - lastUpdatedAt) / 1000))
+		: 0;
 
 	// Determine current speed
 	const pokemon = racer.expand.pokemon;

@@ -1,202 +1,172 @@
-import { subscribeToRaces } from '$lib/stores/race.svelte';
+import { randomUUID } from 'node:crypto';
 
-import { simulateRacer } from './simulateRacer';
+import type { Race, Racer, RaceTrack } from '$lib/types';
 import { shouldFinishRace } from './raceCompletion';
-import { EventSource } from 'eventsource';
-
-import { create5DayLeagueEvents, resolveOvertaking } from './serverFunctions';
-import pb, { authenticateServer } from './pocketbase';
-
-import { subscribeToUsers } from '$lib/stores/user.svelte';
-
-import type { EventType, Race, Racer, RaceTrack, User } from '$lib/types';
-import { getAllRaces, startRace, updateRace } from './races';
-import { getAllRacers, updateRacer } from './racers';
-import { getAllEvents, updateEvent } from './events';
+import { getRacers } from './racers';
+import { getRunningRaces } from './races';
 import { getAllRacetracks } from './racetracks';
-import { subscribeToRacers } from '$lib/stores/racer.svelte';
-import { subscribeToEvents } from '$lib/stores/event.svelte';
-import { getAnimData } from './pokemon';
+import { resolveOvertaking } from './serverFunctions';
+import { simulateRacer } from './simulateRacer';
+import { authenticateServer } from './pocketbase';
+import {
+	claimSimulatorLease,
+	commitRaceSimulation,
+	type RacerSimulationUpdate,
+	type SimulatorLeaseGrant
+} from './simulatorLease';
 
-//const SIM_INTERVAL = 100;
-const SIM_INTERVAL = 500;
+const SIM_INTERVAL_MS = 500;
+const LEASE_TTL_MS = 5_000;
+const LEASE_HEARTBEAT_MS = 1_000;
+const ownerId = randomUUID();
 
-let racers: Racer[] = [];
-let races: Race[] = [];
-let events: EventType[] = [];
-let users: User[] = [];
-let racetracks: RaceTrack[] = [];
+let timer: ReturnType<typeof setInterval> | undefined;
+let tickInProgress = false;
 
-export async function startUp() {
-	console.log('Starting up...');
-	// await create5DayLeagueEvents();
+export async function startUp(): Promise<void> {
+	if (timer) return;
 
-	global.EventSource = EventSource;
-	await authenticateServer();
+	console.info('Background race simulator starting.', { ownerId });
+	timer = setInterval(() => void runScheduledTick(), SIM_INTERVAL_MS);
+	void runScheduledTick();
+}
 
-	racers = await getAllRacers();
+async function runScheduledTick(): Promise<void> {
+	if (tickInProgress) return;
+	tickInProgress = true;
 
-	for (const racer of racers) {
-		const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${racer.expand.pokemon?.name}`);
-
-		const data = await response.json();
-		const pokemonDexId = data.id;
-		if (racer.expand.pokemon?.name === 'genesect') {
-			console.log(pokemonDexId);
-		}
-		const animData = await getAnimData(pokemonDexId);
-
-		await pb.collection('pokemon').update(racer?.expand?.pokemon?.id || '0', { animData });
+	try {
+		await serverTick();
+	} catch (error) {
+		console.error('Background race simulator tick failed.', { ownerId, error });
+	} finally {
+		tickInProgress = false;
 	}
-
-	races = await getAllRaces();
-	events = await getAllEvents();
-	racetracks = await getAllRacetracks();
-
-	await subscribeToRacers(racers, pb);
-	await subscribeToRaces(races, pb);
-	await subscribeToEvents(events, pb);
-	await subscribeToUsers(users, pb);
-
-	startServerTick();
 }
 
-function startServerTick() {
-	setInterval(serverTick, SIM_INTERVAL);
-}
+async function serverTick(): Promise<void> {
+	await authenticateServer();
+	let lease = await claimSimulatorLease(ownerId, LEASE_TTL_MS);
+	if (!lease) return;
 
-async function serverTick() {
-	const now = Date.now();
-
-	// console.clear();
-	// console.time('gameloop');
-
-	await simulateRaces();
-	// await simulateEvents();
-	// await simulateMarkets();
-	// console.timeEnd('gameloop');
-}
-
-async function simulateRaces() {
+	const [races, racetracks] = await Promise.all([getRunningRaces(), getAllRacetracks()]);
 	for (const race of races) {
-		if (race.status !== 'running') continue;
+		try {
+			lease = await claimSimulatorLease(ownerId, LEASE_TTL_MS);
+			if (!lease) {
+				console.warn('Background race simulator lost ownership.', { ownerId, raceId: race.id });
+				return;
+			}
 
-		const raceRacers = racers.filter((r) => r.race === race.id);
-		const racetrack = racetracks.find((track) => track.id === race.racetrack) || racetracks[0];
+			await simulateRace(race, racetracks, lease);
+		} catch (error) {
+			console.error('Background race simulation failed for race.', {
+				ownerId,
+				raceId: race.id,
+				raceName: race.name,
+				error
+			});
+		}
+	}
+}
+
+async function simulateRace(
+	race: Race,
+	racetracks: RaceTrack[],
+	lease: SimulatorLeaseGrant
+): Promise<void> {
+	if (!race.id) throw new Error('Running race has no id');
+	let heartbeatInProgress = false;
+	let leaseLost = false;
+	const heartbeat = setInterval(async () => {
+		if (heartbeatInProgress || leaseLost) return;
+		heartbeatInProgress = true;
+		try {
+			const renewed = await claimSimulatorLease(lease.ownerId, LEASE_TTL_MS);
+			if (!renewed) leaseLost = true;
+			else lease.token = renewed.token;
+		} catch (error) {
+			console.error('Background race simulator lease heartbeat failed.', {
+				ownerId: lease.ownerId,
+				raceId: race.id,
+				error
+			});
+		} finally {
+			heartbeatInProgress = false;
+		}
+	}, LEASE_HEARTBEAT_MS);
+
+	try {
+		const racers = await getRacers(race.id);
+		const racetrack = racetracks.find((track) => track.id === race.racetrack);
 		if (!racetrack || racetrack.checkpoints.length < 2) {
-			console.error(
-				`Cannot simulate race "${race.name}": its racetrack has fewer than two checkpoints.`
-			);
-			continue;
+			throw new Error('Racetrack has fewer than two checkpoints');
 		}
 
-		let raceChanged = false;
 		const now = Date.now();
+		let raceChanged = false;
+		for (const racer of racers) {
+			const simulated = simulateRacer(racer, racetrack, now, race.totalLaps);
+			Object.assign(racer.currentRace, {
+				checkpointIndex: simulated.checkpointIndex,
+				distanceFromCheckpoint: simulated.distanceFromCheckpoint,
+				lapsCompleted: simulated.lapsCompleted,
+				lastUpdatedAt: simulated.lastUpdatedAt
+			});
+			racer.positioning.x = simulated.x;
+			racer.positioning.y = simulated.y;
+			racer.positioning.trackOffset = racer.positioning.targetTrackOffset ?? 0;
 
-		// Simulate racers
-		await Promise.all(
-			raceRacers.map(async (racer) => {
-				const {
-					checkpointIndex,
-					distanceFromCheckpoint,
-					lapsCompleted,
-					lastUpdatedAt,
-					x,
-					y,
-					finished
-				} = simulateRacer(racer, racetrack, now, race.totalLaps);
-
-				// Update racer state
-				racer.currentRace.checkpointIndex = checkpointIndex;
-				racer.currentRace.distanceFromCheckpoint = distanceFromCheckpoint;
-				racer.currentRace.lapsCompleted = lapsCompleted;
-				racer.currentRace.lastUpdatedAt = lastUpdatedAt;
-				racer.positioning.x = x;
-				racer.positioning.y = y;
-				racer.positioning.trackOffset = racer.positioning.targetTrackOffset ?? 0;
-
-				// Check for winner
-				if (finished && !racer.currentRace.finished) {
-					racer.currentRace.finished = true;
-
-					if (!raceRacers.some((r) => r.currentRace.finished && r.id !== racer.id)) {
-						race.winner = racer?.id || '0';
-						raceChanged = true;
-						console.log(`🏁 Race "${race.name}" finished. Winner: ${racer.name}`);
-					}
+			if (simulated.finished && !racer.currentRace.finished) {
+				racer.currentRace.finished = true;
+				if (!racers.some((other) => other.currentRace.finished && other.id !== racer.id)) {
+					race.winner = racer.id ?? '';
+					raceChanged = true;
+					console.info('Race winner recorded.', {
+						ownerId,
+						raceId: race.id,
+						racerId: racer.id,
+						racerName: racer.name
+					});
 				}
-			})
-		);
+			}
+		}
 
-		// Resolve overtaking
-		resolveOvertaking(raceRacers, now, race, racetrack);
-
-		// If all racers finished, mark race as finished
-		if (shouldFinishRace(raceRacers)) {
+		resolveOvertaking(racers, now, race, racetrack);
+		if (shouldFinishRace(racers)) {
 			race.status = 'finished';
 			raceChanged = true;
 		}
 
-		// Batch update only racers in this race
-		await Promise.all(
-			raceRacers.map(async (r) => {
-				if ((await updateRacer(r?.id || '0', r)) == false) racers.splice(racers.indexOf(r), 1); //remove racer from array if failed to update
-			})
+		const renewed = await claimSimulatorLease(lease.ownerId, LEASE_TTL_MS);
+		if (leaseLost || !renewed) return;
+		lease.token = renewed.token;
+
+		const racerUpdates = racers.map(toSimulationUpdate);
+		const committed = await commitRaceSimulation(
+			lease,
+			racerUpdates,
+			raceChanged ? { id: race.id, status: race.status, winner: race.winner } : undefined
 		);
-
-		// Only update race if it changed
-		if (raceChanged) {
-			await updateRace(race.id || '0', race);
+		if (!committed) {
+			console.warn('Race simulation commit rejected because ownership changed.', {
+				ownerId: lease.ownerId,
+				raceId: race.id,
+				leaseToken: lease.token
+			});
 		}
+	} finally {
+		clearInterval(heartbeat);
 	}
 }
 
-//this will start events (all races within events) if they have not started yet and past the start time
-// and ends them if every race within the event has finished
-async function simulateEvents() {
-	const now = Date.now();
-	for (const event of events) {
-		if (!event.started && event.startTime.getUTCMilliseconds() <= now) {
-			event.started = true;
-			const eventRaces = races.filter((r) => event.raceIds.includes(r.id || '0'));
+function toSimulationUpdate(racer: Racer): RacerSimulationUpdate {
+	if (!racer.id) throw new Error('Racer has no id');
 
-			await Promise.all(
-				eventRaces.map(async (race) => {
-					//update races which have not started yet and past the start time
-					if (race.status == 'pending' && race.startTime.getUTCMilliseconds() <= now) {
-						await startRace(race.id || '0');
-					}
-				})
-			);
-
-			//update event status if all races within the event have finished
-			if (eventRaces.every((r) => r.status == 'finished')) {
-				await updateEvent(event.id || '0', { finished: true });
-			}
-		}
-	}
-
-	//if all DailyLeagueRace type events have finished, generate new ones for the next five days
-	if (events.every((e) => e.finished && e.type == 'DailyLeagueRaces')) {
-		await create5DayLeagueEvents();
-	}
-}
-
-async function simulateMarkets() {
-	// const fakeUsers = users.filter((user) => user.isFake);
-	// for (const racer of racers) {
-	// 	const actions = simulateInvestorActions(racer, fakeUsers);
-	// 	for (const action of actions) {
-	// 		if (action.type === 'buy') {
-	// 			await buyShares(racer, action.investor, action.amount);
-	// 		} else if (action.type === 'sell') {
-	// 			await sellShares(racer, action.investor, action.amount);
-	// 		}
-	// 	}
-	// 	// Recalculate share price based on updated demand
-	// 	const newPrice = calculateSharePrice(racer);
-	// 	await pb.collection('pokemon').update(racer.id, {
-	// 		share_price: newPrice
-	// 	});
-	// }
+	return {
+		id: racer.id,
+		currentRace: racer.currentRace,
+		positioning: racer.positioning,
+		stats: racer.stats
+	};
 }
