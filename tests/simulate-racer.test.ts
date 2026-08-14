@@ -84,3 +84,13 @@ test('caps elapsed movement when resuming a racer after a service restart', () =
 	assert.equal(resumedState.x, 10);
 	assert.equal(resumedState.lastUpdatedAt, new Date(60_000).toISOString());
 });
+
+test('records the crossing instant within a simulation tick', () => {
+	const nearFinish = structuredClone(racer);
+	nearFinish.currentRace.distanceFromCheckpoint = 95;
+
+	const result = simulateRacer(nearFinish, racetrack, 1_000, race.totalLaps);
+
+	assert.equal(result.finished, true);
+	assert.equal(result.finishedAt, new Date(500).toISOString());
+});

@@ -14,11 +14,11 @@ test('records deterministic completion metadata after every racer finishes', () 
 		{ id: 'racer-a', currentRace: { finished: true, finishedAt: '2026-08-14T12:00:01Z' } }
 	] as Racer[];
 
-	assert.deepEqual(buildRaceCompletion('race-1', racers, '2026-08-14T12:00:02Z'), {
+	assert.deepEqual(buildRaceCompletion('race-1', racers), {
 		id: 'race-1',
 		status: 'finished',
 		winner: 'racer-a',
-		endTime: '2026-08-14T12:00:02Z',
+		endTime: '2026-08-14T12:00:01Z',
 		finishingOrder: ['racer-a', 'racer-b']
 	});
 });

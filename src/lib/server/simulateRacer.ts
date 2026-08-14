@@ -24,6 +24,7 @@ export function simulateRacer(
 			lapsCompleted: 0,
 			lastUpdatedAt: new Date(now).toISOString(),
 			finished: true,
+			finishedAt: new Date(now).toISOString(),
 			x: 0,
 			y: 0
 		};
@@ -63,12 +64,16 @@ export function simulateRacer(
 			startLapTimer([racer]);
 
 			if (lapsCompleted >= totalLaps) {
+				const finishedAt = new Date(
+					now - (speed > 0 ? (distanceToTravel / speed) * 1000 : 0)
+				).toISOString();
 				return {
 					checkpointIndex: 0,
 					distanceFromCheckpoint: 0,
 					lapsCompleted,
 					lastUpdatedAt: new Date(now).toISOString(),
 					finished: true,
+					finishedAt,
 					x: checkpoints[0].x,
 					y: checkpoints[0].y
 				};

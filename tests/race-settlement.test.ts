@@ -24,23 +24,19 @@ test('builds progression and configured rewards for every finisher', () => {
 			wins: 1,
 			totalRaces: 2,
 			averageFinishPosition: 2,
-			totalEarnings: 8
+			totalEarnings: 8,
+			ranking: 7
 		}),
-		settlementRacer('racer-a', '2026-08-14T12:00:01.000Z')
+		settlementRacer('racer-a', '2026-08-14T12:00:01.000Z', { ranking: 12 })
 	];
 
-	const settlement = buildRaceSettlement(
-		race,
-		racers,
-		{ 'league-1': 2 },
-		'2026-08-14T12:00:03.000Z'
-	);
+	const settlement = buildRaceSettlement(race, racers, { 'league-1': 2 });
 
 	assert.deepEqual(settlement.race, {
 		id: 'race-1',
 		status: 'settled',
 		winner: 'racer-a',
-		endTime: '2026-08-14T12:00:03.000Z',
+		endTime: '2026-08-14T12:00:02.000Z',
 		finishingOrder: ['racer-a', 'racer-b']
 	});
 	assert.deepEqual(
@@ -56,7 +52,7 @@ test('builds progression and configured rewards for every finisher', () => {
 			{
 				id: 'racer-a',
 				race: '',
-				ranking: 1,
+				ranking: 7,
 				history: {
 					wins: 1,
 					totalRaces: 1,
@@ -66,7 +62,7 @@ test('builds progression and configured rewards for every finisher', () => {
 							raceId: 'race-1',
 							position: 1,
 							prizeMoney: 4,
-							date: '2026-08-14T12:00:03.000Z'
+							date: '2026-08-14T12:00:02.000Z'
 						}
 					]
 				},
@@ -76,7 +72,7 @@ test('builds progression and configured rewards for every finisher', () => {
 			{
 				id: 'racer-b',
 				race: '',
-				ranking: 2,
+				ranking: 12,
 				history: {
 					wins: 1,
 					totalRaces: 3,
@@ -92,7 +88,7 @@ test('builds progression and configured rewards for every finisher', () => {
 							raceId: 'race-1',
 							position: 2,
 							prizeMoney: 2,
-							date: '2026-08-14T12:00:03.000Z'
+							date: '2026-08-14T12:00:02.000Z'
 						}
 					]
 				},
@@ -111,6 +107,7 @@ function settlementRacer(
 		totalRaces?: number;
 		averageFinishPosition?: number;
 		totalEarnings?: number;
+		ranking?: number;
 	} = {}
 ): Racer {
 	const hasHistory = (existing.totalRaces ?? 0) > 0;
@@ -119,7 +116,7 @@ function settlementRacer(
 		race: 'race-1',
 		league: 'league-1',
 		currentRace: { finished: true, finishedAt },
-		stats: { ranking: 99 },
+		stats: { ranking: existing.ranking ?? 99 },
 		raceHistory: {
 			wins: existing.wins ?? 0,
 			totalRaces: existing.totalRaces ?? 0,

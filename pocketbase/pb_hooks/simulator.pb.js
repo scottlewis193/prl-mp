@@ -145,29 +145,16 @@ routerAdd(
 				throw e.badRequestError('A race must have participants before settlement.', {});
 			}
 
-			const finishers = racers.map((racer) => {
-				const currentRace = new DynamicModel({ finished: false, finishedAt: '' });
+			const rewardScaleByLeague = {};
+			const participants = [];
+			const racerById = {};
+			for (const racer of racers) {
+				const currentRace = new DynamicModel({
+					finished: false,
+					finishedAt: '',
+					lastUpdatedAt: ''
+				});
 				racer.unmarshalJSONField('currentRace', currentRace);
-				const finishedAt = typeof currentRace.finishedAt === 'string' ? currentRace.finishedAt : '';
-				const finishedAtMs = Date.parse(finishedAt);
-				if (!currentRace.finished || !Number.isFinite(finishedAtMs)) {
-					throw e.badRequestError('Every participant must have a durable finish time.', {});
-				}
-				return { racer, finishedAtMs };
-			});
-			finishers.sort((left, right) => {
-				const timeComparison = left.finishedAtMs - right.finishedAtMs;
-				return timeComparison !== 0 ? timeComparison : left.racer.id.localeCompare(right.racer.id);
-			});
-
-			const raceEndTime = race.getString('endTime');
-			if (!raceEndTime) {
-				throw e.badRequestError('A finished race must have an end time.', {});
-			}
-			const rewardScales = {};
-			for (let index = 0; index < finishers.length; index++) {
-				const racer = finishers[index].racer;
-				const position = index + 1;
 				const history = new DynamicModel({
 					wins: 0,
 					totalRaces: 0,
@@ -175,20 +162,11 @@ routerAdd(
 					races: []
 				});
 				racer.unmarshalJSONField('raceHistory', history);
-				const previousRaces = Array.isArray(history.races) ? history.races : [];
-				if (previousRaces.some((result) => result && result.raceId === raceId)) {
-					throw e.badRequestError('This race is already present in participant history.', {});
-				}
-
 				const leagueId = racer.getString('league');
-				if (rewardScales[leagueId] === undefined) {
+				if (rewardScaleByLeague[leagueId] === undefined) {
 					const league = txApp.findRecordById('leagues', leagueId);
-					rewardScales[leagueId] = Math.max(0, league.getFloat('prizeMoneyScaling'));
+					rewardScaleByLeague[leagueId] = league.getFloat('prizeMoneyScaling');
 				}
-				const prizeMoney = (finishers.length - index) * rewardScales[leagueId];
-				const previousTotalRaces = Number(history.totalRaces) || 0;
-				const totalRaces = previousTotalRaces + 1;
-				const previousAverage = Number(history.averageFinishPosition) || 0;
 				const stats = new DynamicModel({
 					hp: 0,
 					attack: 0,
@@ -211,43 +189,65 @@ routerAdd(
 				racer.unmarshalJSONField('financials', financials);
 				const ownership = new DynamicModel({ totalShares: 0, shareholders: [] });
 				racer.unmarshalJSONField('ownership', ownership);
-				const totalEarnings = (Number(financials.totalEarnings) || 0) + prizeMoney;
-				const totalShares = Number(ownership.totalShares) || 0;
+				racerById[racer.id] = racer;
+				participants.push({
+					id: racer.id,
+					leagueId,
+					finished: currentRace.finished,
+					finishedAt: currentRace.finishedAt || currentRace.lastUpdatedAt,
+					stats: {
+						hp: stats.hp,
+						attack: stats.attack,
+						defense: stats.defense,
+						speed: stats.speed,
+						level: stats.level,
+						ranking: stats.ranking,
+						gender: stats.gender
+					},
+					raceHistory: {
+						wins: Number(history.wins) || 0,
+						totalRaces: Number(history.totalRaces) || 0,
+						averageFinishPosition: Number(history.averageFinishPosition) || 0,
+						races: Array.from(history.races || [])
+					},
+					financials: {
+						totalEarnings: Number(financials.totalEarnings) || 0,
+						earningsPerShare: Number(financials.earningsPerShare) || 0,
+						lastPayoutAt: financials.lastPayoutAt,
+						issuedShares: financials.issuedShares,
+						outstandingShares: financials.outstandingShares,
+						currentSharePrice: financials.currentSharePrice,
+						priceHistory: financials.priceHistory
+					},
+					totalShares: Number(ownership.totalShares) || 0
+				});
+			}
 
+			let plan;
+			try {
+				const settlementRules = require(`${__hooks}/raceSettlement.cjs`);
+				plan = settlementRules.buildRaceSettlement({
+					raceId,
+					participants,
+					rewardScaleByLeague
+				});
+			} catch (error) {
+				throw e.badRequestError(error.message, {});
+			}
+
+			for (const update of plan.racers) {
+				const racer = racerById[update.id];
 				racer.set('race', null);
-				racer.set('stats', {
-					hp: stats.hp,
-					attack: stats.attack,
-					defense: stats.defense,
-					speed: stats.speed,
-					level: stats.level,
-					ranking: position,
-					gender: stats.gender
-				});
-				racer.set('raceHistory', {
-					wins: (Number(history.wins) || 0) + (position === 1 ? 1 : 0),
-					totalRaces,
-					averageFinishPosition: (previousAverage * previousTotalRaces + position) / totalRaces,
-					races: [...previousRaces, { raceId, position, prizeMoney, date: raceEndTime }]
-				});
-				racer.set('financials', {
-					totalEarnings,
-					earningsPerShare: totalShares > 0 ? totalEarnings / totalShares : 0,
-					lastPayoutAt: raceEndTime,
-					issuedShares: financials.issuedShares,
-					outstandingShares: financials.outstandingShares,
-					currentSharePrice: financials.currentSharePrice,
-					priceHistory: financials.priceHistory
-				});
+				racer.set('stats', update.stats);
+				racer.set('raceHistory', update.raceHistory);
+				racer.set('financials', update.financials);
 				txApp.save(racer);
 			}
 
-			race.set('winner', finishers[0].racer.id);
-			race.set(
-				'finishingOrder',
-				finishers.map((finisher) => finisher.racer.id)
-			);
-			race.set('status', 'settled');
+			race.set('winner', plan.race.winner);
+			race.set('finishingOrder', plan.race.finishingOrder);
+			race.set('endTime', plan.race.endTime);
+			race.set('status', plan.race.status);
 			txApp.save(race);
 			settled = true;
 		});

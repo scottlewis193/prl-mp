@@ -155,17 +155,17 @@ test('settles a finished race atomically and remains unchanged when settlement i
 		sort: 'id'
 	});
 	await Promise.all(
-		racers.map((racer, index) =>
-			firstWorker.collection('racers').update(racer.id, {
+		racers.map((racer, index) => {
+			const crossingTime = new Date(Date.parse(finishedAt) - (index + 1) * 1000).toISOString();
+			return firstWorker.collection('racers').update(racer.id, {
 				currentRace: {
 					...racer.currentRace,
 					finished: true,
-					finishedAt: new Date(
-						Date.parse(finishedAt) - (racers.length - index) * 1000
-					).toISOString()
+					lastUpdatedAt: crossingTime,
+					...(index === racers.length - 1 ? {} : { finishedAt: crossingTime })
 				}
-			})
-		)
+			});
+		})
 	);
 	await firstWorker.collection('races').update(raceId, {
 		status: 'finished',
@@ -178,7 +178,7 @@ test('settles a finished race atomically and remains unchanged when settlement i
 	});
 	assert.equal(
 		finishedRacers.every(
-			(racer) => racer.currentRace.finished && typeof racer.currentRace.finishedAt === 'string'
+			(racer) => racer.currentRace.finished && typeof racer.currentRace.lastUpdatedAt === 'string'
 		),
 		true
 	);
@@ -188,12 +188,15 @@ test('settles a finished race atomically and remains unchanged when settlement i
 	const settledRace = await firstWorker.collection('races').getOne(raceId);
 	const settledRacers = await firstWorker.collection('racers').getFullList({ sort: 'id' });
 	assert.equal(settledRace.status, 'settled');
-	assert.equal(settledRace.winner, racers[0].id);
+	assert.equal(settledRace.winner, racers.at(-1)?.id);
 	assert.deepEqual(
 		settledRace.finishingOrder,
-		racers.map((racer) => racer.id)
+		[...racers].reverse().map((racer) => racer.id)
 	);
-	assert.equal(settledRace.endTime, finishedAt.replace('T', ' '));
+	assert.equal(
+		settledRace.endTime,
+		new Date(Date.parse(finishedAt) - 1000).toISOString().replace('T', ' ')
+	);
 	assert.equal(
 		settledRacers.every((racer) => racer.race === ''),
 		true
@@ -208,12 +211,12 @@ test('settles a finished race atomically and remains unchanged when settlement i
 			totalEarnings: racer.financials.totalEarnings
 		})),
 		Array.from({ length: racers.length }, (_, index) => ({
-			position: index + 1,
-			prizeMoney: racers.length - index,
+			position: racers.length - index,
+			prizeMoney: index + 1,
 			totalRaces: 1,
-			wins: index === 0 ? 1 : 0,
-			ranking: index + 1,
-			totalEarnings: racers.length - index
+			wins: index === racers.length - 1 ? 1 : 0,
+			ranking: racers.length - index,
+			totalEarnings: index + 1
 		}))
 	);
 

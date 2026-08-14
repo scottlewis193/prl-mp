@@ -136,14 +136,14 @@ async function simulateRace(
 
 			if (simulated.finished && !racer.currentRace.finished) {
 				racer.currentRace.finished = true;
-				racer.currentRace.finishedAt = finishedAt;
+				racer.currentRace.finishedAt = simulated.finishedAt ?? finishedAt;
 			}
 		}
 
 		resolveOvertaking(racers, now, race, racetrack);
 		let raceUpdate;
 		if (shouldFinishRace(racers)) {
-			raceUpdate = buildRaceCompletion(race.id, racers, finishedAt);
+			raceUpdate = buildRaceCompletion(race.id, racers);
 			console.info('Race completion recorded.', {
 				ownerId,
 				raceId: race.id,
