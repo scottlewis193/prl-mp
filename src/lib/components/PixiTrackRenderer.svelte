@@ -1,301 +1,247 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
-	import { Application, Assets, Container, Rectangle, Sprite, Texture } from 'pixi.js';
+	import { onMount } from 'svelte';
+	import {
+		Application,
+		Assets,
+		Container,
+		Matrix,
+		Rectangle,
+		Sprite,
+		Texture,
+		type Ticker
+	} from 'pixi.js';
 
 	import { getCameraContext } from '$lib/stores/camera.svelte';
 	import { getCurrentRaceContext } from '$lib/stores/race.svelte';
 	import { getCurrentRacersContext, getPBImageDataUrl } from '$lib/stores/racer.svelte';
 	import { getCurrentRacetrackContext } from '$lib/stores/racetrack.svelte';
 	import { getWalkSpriteUrl } from '$lib/pokemonSpriteUrl';
+	import pb from '$lib/pocketbase';
+	import {
+		createTrackRenderPlan,
+		resolveTrackTilesetUrl,
+		type TilesetUrlResolver,
+		type TrackRenderPlan
+	} from '$lib/trackRendering';
+	import { createViewerLifecycleManager } from '$lib/viewerLifecycle';
 	import type { Racer } from '$lib/types';
+
+	type ViewerLifecycle = ReturnType<typeof createViewerLifecycleManager>['current'];
+	type ViewerResources = {
+		appDestroyed: boolean;
+		trackContainer?: Container;
+		trackIsCached: boolean;
+		racerSprites: Map<Racer, Sprite>;
+	};
 
 	const race = getCurrentRaceContext();
 	const racetrack = getCurrentRacetrackContext();
-
 	const racers = getCurrentRacersContext();
 	const camera = getCameraContext();
 
-	const checkpoints: { index: number; x: number; y: number }[] = $state([]);
-
-	const lerp = (start: number, end: number, t: number) => start + (end - start) * t;
-
+	let canvasEl: HTMLCanvasElement;
+	let app: Application | undefined;
+	let world: Container | undefined;
+	let trackContainer: Container | undefined;
+	let checkpoints: TrackRenderPlan['checkpoints'] = [];
+	const lifecycleManager = createViewerLifecycleManager();
+	let status = $state<'loading' | 'ready' | 'error'>('loading');
+	let errorMessage = $state('');
 	let isDragging = false;
 	let dragStart = { x: 0, y: 0 };
+	const touch = { pinchStart: 0, isScaling: false, distance: 0 };
 
-	function updateCamera() {
-		container.scale.set(camera.zoom);
-		container.x = camera.x;
-		container.y = camera.y;
+	onMount(() => {
+		void initializeViewer();
+		return () => void disposeViewer();
+	});
+
+	async function initializeViewer() {
+		status = 'loading';
+		errorMessage = '';
+		const currentLifecycle = await lifecycleManager.replace();
+		if (currentLifecycle.disposed) return;
+		const resources: ViewerResources = {
+			appDestroyed: false,
+			trackIsCached: false,
+			racerSprites: new Map()
+		};
+		const currentApp = new Application();
+		currentLifecycle.renderer(() => destroyApplication(currentApp, resources));
+
+		try {
+			app = currentApp;
+			await currentApp.init({
+				canvas: canvasEl,
+				resizeTo: canvasEl.parentElement ?? window,
+				background: 0x000000,
+				resolution: window.devicePixelRatio || 1,
+				autoDensity: true,
+				antialias: false,
+				autoStart: false
+			});
+
+			if (currentLifecycle.disposed) {
+				destroyApplication(currentApp, resources);
+				return;
+			}
+
+			world = new Container({ label: 'race-world' });
+			trackContainer = new Container({ label: 'static-track', isRenderGroup: true });
+			resources.trackContainer = trackContainer;
+			const racerContainer = new Container({ label: 'racers' });
+			world.addChild(trackContainer, racerContainer);
+			currentApp.stage.addChild(world);
+			updateCamera();
+
+			const setupStartedAt = performance.now();
+			const plan = createTrackRenderPlan(racetrack, resolveTilesetUrl);
+			checkpoints = plan.checkpoints;
+			await setupTrack(plan, trackContainer, currentLifecycle);
+			if (currentLifecycle.disposed) return;
+			await setupRacers(racerContainer, currentLifecycle, resources);
+			if (currentLifecycle.disposed) return;
+
+			const canCacheTrack =
+				plan.tileCount >= 128 && plan.size.width <= 4096 && plan.size.height <= 4096;
+			if (canCacheTrack) {
+				trackContainer.cacheAsTexture(true);
+				resources.trackIsCached = true;
+			}
+			console.debug('Race track render profile', {
+				track: racetrack.name,
+				tiles: plan.tileCount,
+				layers: plan.layers.length,
+				setupMs: Math.round((performance.now() - setupStartedAt) * 10) / 10,
+				strategy: canCacheTrack ? 'cached static container' : 'sprite batching'
+			});
+
+			addListeners(currentLifecycle);
+			const frameProfileStartedAt = performance.now();
+			let profiledFrames = 0;
+			const tickViewer = (ticker: Ticker) => {
+				updateRacers(ticker);
+				profiledFrames++;
+				if (profiledFrames === 60) {
+					console.debug('Race viewer frame profile', {
+						track: racetrack.name,
+						fps: Math.round(ticker.FPS),
+						averageFrameMs:
+							Math.round(((performance.now() - frameProfileStartedAt) / profiledFrames) * 10) / 10,
+						strategy: canCacheTrack ? 'cached static container' : 'sprite batching'
+					});
+				}
+			};
+			currentLifecycle.tick(currentApp.ticker, tickViewer);
+			currentApp.start();
+			status = 'ready';
+		} catch (error) {
+			if (currentLifecycle.disposed) {
+				destroyApplication(currentApp, resources);
+				return;
+			}
+			console.error('Unable to start race viewer', error);
+			errorMessage = error instanceof Error ? error.message : 'An unknown loading error occurred.';
+			status = 'error';
+			await currentLifecycle.dispose();
+		}
 	}
 
-	let canvasEl: HTMLCanvasElement;
+	async function disposeViewer() {
+		await lifecycleManager.dispose();
+		app = undefined;
+		world = undefined;
+		trackContainer = undefined;
+		checkpoints = [];
+		isDragging = false;
+		touch.isScaling = false;
+	}
 
-	const TILE_WIDTH = 16;
-	const TILE_HEIGHT = 16;
-	const TILESET_WIDTH = 2240;
-	const TILES_PER_ROW = TILESET_WIDTH / TILE_WIDTH;
-	const FIRST_GID = 1;
-
-	let fps = $state(60);
-	let app: Application;
-	let container: Container;
-	let ready = false;
-	const touch: { pinchStart: number; isScaling: boolean; distance: number } = {
-		pinchStart: 0,
-		isScaling: false,
-		distance: 0
-	};
-
-	onMount(async () => {
-		app = new Application();
-
-		await app.init({
-			canvas: canvasEl,
-			resizeTo: canvasEl.parentElement ? canvasEl.parentElement : window,
-			backgroundColor: 0x000000,
-			resolution: window.devicePixelRatio || 1,
-			autoDensity: true,
-			antialias: false
-		});
-
-		container = new Container();
-		app.stage.addChild(container);
-
-		//setup track
-		await setupTrack();
-
-		//setup racers
-		await setupRacers();
-		ready = true;
-
-		addListeners();
-
-		startTicker();
-	});
-
-	onDestroy(() => {
-		if (app) {
-			app.destroy(true, { children: true, texture: true, context: true });
+	function destroyApplication(currentApp: Application, resources: ViewerResources) {
+		if (resources.appDestroyed || !currentApp.renderer) return;
+		resources.appDestroyed = true;
+		if (
+			resources.trackIsCached &&
+			resources.trackContainer &&
+			!resources.trackContainer.destroyed
+		) {
+			resources.trackContainer.cacheAsTexture(false);
 		}
-	});
-
-	function addListeners() {
-		console.log('addListeners');
-
-		canvasEl.addEventListener('mousedown', (e) => {
-			if (camera.mode !== 'free') return;
-			isDragging = true;
-			dragStart = { x: e.clientX, y: e.clientY };
-		});
-
-		canvasEl.addEventListener('touchstart', (e) => {
-			if (camera.mode !== 'free') return;
-			if (e.touches.length === 2) {
-				touch.pinchStart = Math.hypot(
-					e.touches[0].pageX - e.touches[1].pageX,
-					e.touches[0].pageY - e.touches[1].pageY
-				);
-				touch.isScaling = true;
-			} else {
-				isDragging = true;
-				dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+		for (const [racer, sprite] of resources.racerSprites) {
+			if (racer._pixiSprite === sprite) {
+				racer._pixiSprite = undefined;
+				racer._frames = [];
+				racer._frameElapsed = undefined;
 			}
-		});
-
-		window.addEventListener('mousemove', (e) => {
-			if (!isDragging) return;
-
-			const dx = e.clientX - dragStart.x;
-			const dy = e.clientY - dragStart.y;
-
-			camera.x += dx;
-			camera.y += dy;
-
-			dragStart = { x: e.clientX, y: e.clientY };
-			updateCamera();
-		});
-
-		window.addEventListener('touchmove', (e) => {
-			if (touch.isScaling) {
-				touch.distance = Math.hypot(
-					e.touches[0].pageX - e.touches[1].pageX,
-					e.touches[0].pageY - e.touches[1].pageY
-				);
-
-				const change = touch.distance - touch.pinchStart;
-				touchPinch(change);
-
-				// if (touch.pinchStart >= 200 && touch.distance <= 90) touchPinchOut(); //call function for pinchOut
-				// if (touch.pinchStart <= 100 && touch.distance >= 280) touchPinchIn(); //call function for pinchIn
-			} else {
-				if (!isDragging) return;
-
-				const dx = e.touches[0].clientX - dragStart.x;
-				const dy = e.touches[0].clientY - dragStart.y;
-
-				camera.x += dx;
-				camera.y += dy;
-
-				dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-				updateCamera();
-			}
-		});
-
-		window.addEventListener('touchcancel', (e) => {
-			touch.isScaling = false;
-		});
-
-		window.addEventListener('mouseup', () => {
-			isDragging = false;
-		});
-
-		window.addEventListener('touchend', () => {
-			if (touch.isScaling) touch.isScaling = false;
-			isDragging = false;
-		});
-
-		canvasEl.addEventListener(
-			'wheel',
-			(e) => {
-				e.preventDefault();
-				const zoomAmount = e.deltaY * -0.001;
-				camera.zoom = Math.max(0.2, Math.min(4, camera.zoom + zoomAmount));
-				updateCamera();
-			},
-			{ passive: false }
+		}
+		currentApp.stop();
+		currentApp.destroy(
+			{ removeView: false },
+			{ children: true, texture: true, textureSource: false }
 		);
 	}
 
-	function touchPinch(change: number) {
-		camera.zoom = Math.max(0.2, camera.zoom + change / 10000);
-		updateCamera();
-	}
+	const resolveTilesetUrl: TilesetUrlResolver = (track, tileset, index) => {
+		return resolveTrackTilesetUrl(track, tileset, index, (record, filename) =>
+			pb.files.getURL(record, filename)
+		);
+	};
 
-	function startTicker() {
-		if (!app || !ready) {
-			console.log('not ready');
-			return;
-		}
-		console.log('startTicker');
-
-		app.ticker.add((ticker) => {
-			fps = Math.round(ticker.FPS);
-
-			for (const racer of racers) {
-				if (!racer._frames || !racer._pixiSprite) continue;
-				// Frame animation timing
-				const durations: number[] = racer._frameDurations ?? [8, 8, 6, 4, 4, 4]; // frames at 60fps
-				const frameCount = durations.length;
-
-				// Initialize time tracking if missing
-				if (racer._frameElapsed === undefined) racer._frameElapsed = 0;
-
-				racer._frameElapsed += ticker.deltaMS;
-
-				const currentDuration = durations[racer._frame] * (1000 / 60); // Convert to ms
-
-				if (racer._frameElapsed >= currentDuration) {
-					racer._frameElapsed %= currentDuration; // keep leftover time
-					racer._frame = (racer._frame + 1) % frameCount;
+	async function setupTrack(
+		plan: TrackRenderPlan,
+		destination: Container,
+		currentLifecycle: ViewerLifecycle
+	) {
+		const textures = await Promise.all(
+			plan.tilesets.map(async (tileset) => {
+				try {
+					const texture = (await Assets.load({
+						src: tileset.url,
+						data: { scaleMode: 'nearest' }
+					})) as Texture;
+					currentLifecycle.asset(tileset.url, (source) => Assets.unload(source));
+					return texture;
+				} catch (error) {
+					throw new Error(`Could not load tileset “${tileset.url}”.`, { cause: error });
 				}
+			})
+		);
+		if (currentLifecycle.disposed) return;
 
-				// Set sprite based on direction and frame
-				const angle = getAngle(racer);
-				const fx = racer._frame;
-				const fy = angleTo8DirectionIndex(angle);
-				const frameIndex = fy * frameCount + fx;
-
-				if (racer._frames[frameIndex]) {
-					racer._pixiSprite.texture = racer._frames[frameIndex];
+		for (const layerPlan of plan.layers) {
+			const layer = new Container({ label: layerPlan.name, alpha: layerPlan.opacity });
+			for (const tile of layerPlan.tiles) {
+				const texture = new Texture({
+					source: textures[tile.tilesetIndex].source,
+					frame: new Rectangle(tile.frame.x, tile.frame.y, tile.frame.width, tile.frame.height)
+				});
+				const sprite = new Sprite({ texture, x: tile.x, y: tile.y, roundPixels: true });
+				if (tile.transform) {
+					sprite.anchor.set(0.5);
+					sprite.setFromMatrix(
+						new Matrix(
+							tile.transform.a,
+							tile.transform.b,
+							tile.transform.c,
+							tile.transform.d,
+							tile.x + tile.frame.width / 2,
+							tile.y + tile.frame.height / 2
+						)
+					);
 				}
-
-				// Smooth interpolation based on time
-				const now = performance.now();
-				const duration = racer._interpDuration || 500;
-
-				const t = clamp((now - racer._interpStartTime) / duration, 0, 1);
-
-				racer._displayX = lerp(racer._lastTargetX, racer._targetX, t);
-				racer._displayY = lerp(racer._lastTargetY, racer._targetY, t);
-
-				racer._pixiSprite.x = racer._displayX;
-				racer._pixiSprite.y = racer._displayY;
-
-				if (racers[0] === racer) {
-					// console.log('racer:', racer._interpStartTime, racer._lastTargetX, racer._lastTargetY);
-				}
-
-				if (camera.mode === 'follow' && camera.targetRacerId === racer.id) {
-					camera.x = app.screen.width / 2 - racer._displayX;
-					camera.y = app.screen.height / 2 - racer._displayY;
-					updateCamera();
-				}
+				layer.addChild(sprite);
 			}
-		});
-	}
-
-	function clamp(value: number, min: number, max: number) {
-		return Math.max(min, Math.min(max, value));
-	}
-
-	async function setupTrack() {
-		console.log('setupTrack');
-		const tileset = await Assets.load({
-			src: '/pokemon_tileset.png',
-			data: { scaleMode: 'nearest', roundPixels: true }
-		});
-		for (const layer of racetrack.data.layers) {
-			//get checkpoints
-			if (layer.name.toLowerCase() == 'checkpoints') {
-				for (const object of layer?.objects || []) {
-					checkpoints.push({ index: Number(object.name), x: object.x, y: object.y });
-				}
-				checkpoints.sort((a, b) => a.index - b.index);
-				continue;
-			}
-
-			if (layer.type !== 'tilelayer' || !layer.chunks) continue;
-			for (const chunk of layer.chunks) {
-				const { x: chunkX, y: chunkY, width, data } = chunk;
-
-				for (let i = 0; i < data.length; i++) {
-					const gid = data[i];
-					if (gid === 0) continue;
-
-					const localX = i % width;
-					const localY = Math.floor(i / width);
-
-					const tileX = (chunkX + localX) * TILE_WIDTH;
-					const tileY = (chunkY + localY) * TILE_HEIGHT;
-
-					const texIndex = gid - FIRST_GID;
-					const sx = (texIndex % TILES_PER_ROW) * TILE_WIDTH;
-					const sy = Math.floor(texIndex / TILES_PER_ROW) * TILE_HEIGHT;
-
-					// const tileTexture = new Texture({
-					// 	source: tileset,
-					// 	frame: new Rectangle(sx, sy, TILE_WIDTH, TILE_HEIGHT)
-					// });
-					const tileTexture = new Texture({
-						source: tileset,
-						frame: getTileFrame(texIndex, racetrack.data.tilesets[0])
-					});
-					const sprite = new Sprite(tileTexture);
-					sprite.x = Math.floor(tileX);
-					sprite.y = Math.floor(tileY);
-					container.addChild(sprite);
-				}
-			}
+			destination.addChild(layer);
 		}
 	}
 
-	async function setupRacers() {
-		console.log('setupRacers');
-
+	async function setupRacers(
+		destination: Container,
+		currentLifecycle: ViewerLifecycle,
+		resources: ViewerResources
+	) {
 		for (const racer of racers) {
-			if (!racer.pokemon || !racer.expand.pokemon) {
-				continue;
-			}
+			if (!racer.pokemon || !racer.expand.pokemon) continue;
 
 			const pokemon = racer.expand.pokemon;
 			const bundledSprite = getWalkSpriteUrl(pokemon);
@@ -305,115 +251,225 @@
 
 			let baseTexture: Texture;
 			try {
-				baseTexture = await Assets.load({
+				baseTexture = (await Assets.load({
 					src: spriteSheet,
-					data: { scaleMode: 'nearest', roundPixels: true }
-				});
+					data: { scaleMode: 'nearest' }
+				})) as Texture;
+				currentLifecycle.asset(spriteSheet, (source) => Assets.unload(source));
 			} catch (error) {
-				console.warn(`Failed to load sprite sheet for ${pokemon.name}`, error);
-				continue;
+				throw new Error(`Could not load ${pokemon.name}’s sprite sheet.`, { cause: error });
 			}
+			if (currentLifecycle.disposed) return;
 
-			if (!baseTexture?.source?.resource) {
-				console.warn(`Failed to load sprite sheet for ${pokemon.name}`);
-				continue;
-			}
-			const anim = getAnim(racer, 'Walk');
-			const frameWidth = anim?.FrameWidth ?? 40;
-			const frameHeight = anim?.FrameHeight ?? 40;
-			const durations = anim?.Durations?.Duration ?? [8, 8, 6, 4, 4, 4];
-
+			const animation = getAnimation(racer, 'Walk');
+			const frameWidth = animation?.FrameWidth ?? 40;
+			const frameHeight = animation?.FrameHeight ?? 40;
+			const durations: number[] = animation?.Durations?.Duration ?? [8, 8, 6, 4, 4, 4];
 			const frames: Texture[] = [];
 			for (let row = 0; row < 8; row++) {
-				for (let col = 0; col < durations.length; col++) {
-					const rect = new Rectangle(col * frameWidth, row * frameHeight, frameWidth, frameHeight);
-					const frameTexture = new Texture({ source: baseTexture.source, frame: rect });
-					frameTexture.source.scaleMode = 'nearest';
-					frames.push(frameTexture);
+				for (let column = 0; column < durations.length; column++) {
+					frames.push(
+						new Texture({
+							source: baseTexture.source,
+							frame: new Rectangle(column * frameWidth, row * frameHeight, frameWidth, frameHeight)
+						})
+					);
 				}
 			}
-			racer._frames = frames;
 
-			//set initial values
-			racer._frame = Math.floor(Math.random() * (frames.length / 8)); //random starting frame
+			racer._frames = frames;
+			racer._frame = Math.floor(Math.random() * durations.length);
 			racer._frameDurations = durations;
-			racer._lastFrameTime = performance.now();
 			racer._lastTargetX = racer.positioning.x;
 			racer._lastTargetY = racer.positioning.y;
 			racer._targetX = racer.positioning.x;
 			racer._targetY = racer.positioning.y;
-
-			const sprite = new Sprite(frames[0]);
-			sprite.anchor.set(0.5);
-
-			sprite.x = 0;
-			sprite.y = 0;
-			sprite.width = frameWidth;
-			sprite.height = frameHeight;
-			racer._pixiSprite = sprite;
 			racer._interpStartTime = performance.now();
-			racer._interpDuration = 100; // Or whatever value makes sense (ms)
+			racer._interpDuration = 100;
 
-			container.addChild(sprite);
+			const sprite = new Sprite({ texture: frames[0], anchor: 0.5 });
+			sprite.setSize(frameWidth, frameHeight);
+			racer._pixiSprite = sprite;
+			resources.racerSprites.set(racer, sprite);
+			destination.addChild(sprite);
 		}
 	}
 
-	function getTileFrame(tileIndex: number, tileset: any): Rectangle {
-		const cols = tileset.columns;
-		const tileW = tileset.tilewidth;
-		const tileH = tileset.tileheight;
-		const margin = tileset.margin;
-		const spacing = tileset.spacing;
-
-		const col = tileIndex % cols;
-		const row = Math.floor(tileIndex / cols);
-
-		const x = margin + col * (tileW + spacing);
-		const y = margin + row * (tileH + spacing);
-
-		return new Rectangle(x, y, tileW, tileH);
+	function addListeners(currentLifecycle: ViewerLifecycle) {
+		currentLifecycle.listen(canvasEl, 'mousedown', onMouseDown);
+		currentLifecycle.listen(canvasEl, 'touchstart', onTouchStart);
+		currentLifecycle.listen(window, 'mousemove', onMouseMove);
+		currentLifecycle.listen(window, 'touchmove', onTouchMove);
+		currentLifecycle.listen(window, 'touchcancel', stopTouch);
+		currentLifecycle.listen(window, 'mouseup', stopDragging);
+		currentLifecycle.listen(window, 'touchend', stopTouch);
+		currentLifecycle.listen(canvasEl, 'wheel', onWheel, { passive: false });
 	}
+
+	function onMouseDown(event: Event) {
+		if (camera.mode !== 'free') return;
+		const mouseEvent = event as MouseEvent;
+		isDragging = true;
+		dragStart = { x: mouseEvent.clientX, y: mouseEvent.clientY };
+	}
+
+	function onTouchStart(event: Event) {
+		if (camera.mode !== 'free') return;
+		const touchEvent = event as TouchEvent;
+		if (touchEvent.touches.length === 2) {
+			touch.pinchStart = touchDistance(touchEvent);
+			touch.isScaling = true;
+		} else if (touchEvent.touches[0]) {
+			isDragging = true;
+			dragStart = { x: touchEvent.touches[0].clientX, y: touchEvent.touches[0].clientY };
+		}
+	}
+
+	function onMouseMove(event: Event) {
+		if (!isDragging) return;
+		const mouseEvent = event as MouseEvent;
+		panCamera(mouseEvent.clientX, mouseEvent.clientY);
+	}
+
+	function onTouchMove(event: Event) {
+		const touchEvent = event as TouchEvent;
+		if (touch.isScaling && touchEvent.touches.length === 2) {
+			touch.distance = touchDistance(touchEvent);
+			camera.zoom = Math.max(
+				0.2,
+				Math.min(4, camera.zoom + (touch.distance - touch.pinchStart) / 10000)
+			);
+			touch.pinchStart = touch.distance;
+			updateCamera();
+		} else if (isDragging && touchEvent.touches[0]) {
+			panCamera(touchEvent.touches[0].clientX, touchEvent.touches[0].clientY);
+		}
+	}
+
+	function onWheel(event: Event) {
+		const wheelEvent = event as WheelEvent;
+		wheelEvent.preventDefault();
+		camera.zoom = Math.max(0.2, Math.min(4, camera.zoom - wheelEvent.deltaY * 0.001));
+		updateCamera();
+	}
+
+	function stopDragging() {
+		isDragging = false;
+	}
+
+	function stopTouch() {
+		touch.isScaling = false;
+		isDragging = false;
+	}
+
+	function touchDistance(event: TouchEvent) {
+		return Math.hypot(
+			event.touches[0].pageX - event.touches[1].pageX,
+			event.touches[0].pageY - event.touches[1].pageY
+		);
+	}
+
+	function panCamera(x: number, y: number) {
+		camera.x += x - dragStart.x;
+		camera.y += y - dragStart.y;
+		dragStart = { x, y };
+		updateCamera();
+	}
+
+	function updateCamera() {
+		if (!world) return;
+		world.scale.set(camera.zoom);
+		world.position.set(camera.x, camera.y);
+	}
+
+	function updateRacers(ticker: Ticker) {
+		for (const racer of racers) {
+			if (!racer._frames?.length || !racer._pixiSprite) continue;
+			const durations = racer._frameDurations?.length ? racer._frameDurations : [8, 8, 6, 4, 4, 4];
+			racer._frameElapsed = (racer._frameElapsed ?? 0) + ticker.deltaMS;
+			const currentDuration = durations[racer._frame] * (1000 / 60);
+			if (racer._frameElapsed >= currentDuration) {
+				racer._frameElapsed %= currentDuration;
+				racer._frame = (racer._frame + 1) % durations.length;
+			}
+
+			const frameIndex = angleTo8DirectionIndex(getAngle(racer)) * durations.length + racer._frame;
+			if (racer._frames[frameIndex]) racer._pixiSprite.texture = racer._frames[frameIndex];
+
+			const interpolation = clamp(
+				(performance.now() - racer._interpStartTime) / (racer._interpDuration || 500),
+				0,
+				1
+			);
+			racer._displayX = lerp(racer._lastTargetX, racer._targetX, interpolation);
+			racer._displayY = lerp(racer._lastTargetY, racer._targetY, interpolation);
+			racer._pixiSprite.position.set(racer._displayX, racer._displayY);
+
+			if (camera.mode === 'follow' && camera.targetRacerId === racer.id && app) {
+				camera.x = app.screen.width / 2 - racer._displayX;
+				camera.y = app.screen.height / 2 - racer._displayY;
+				updateCamera();
+			}
+		}
+	}
+
+	const lerp = (start: number, end: number, amount: number) => start + (end - start) * amount;
+	const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
 	function getAngle(racer: Racer): number {
-		if (!race) return 0;
-
-		const checkpoints = racetrack.checkpoints;
-		const i = racer.currentRace.checkpointIndex;
-		const a = checkpoints[i];
-		const b = checkpoints[(i + 1) % Object.values(checkpoints).length];
-
-		const dx = b.x - a.x;
-		const dy = b.y - a.y;
-
-		// Use Math.atan2, which handles direction correctly
-		const angle = Math.atan2(dy, dx); // in radians
-
-		return angle;
+		if (!race || checkpoints.length < 2) return 0;
+		const index = racer.currentRace.checkpointIndex % checkpoints.length;
+		const current = checkpoints[index];
+		const next = checkpoints[(index + 1) % checkpoints.length];
+		return Math.atan2(next.y - current.y, next.x - current.x);
 	}
 
-	function getAnim(racer: Racer, name: string) {
-		if (!racer.expand.pokemon) {
-			return null;
-		}
-		const anims = racer.expand.pokemon.animData?.AnimData?.Anims?.Anim;
-		return anims?.find((a: any) => a.Name === name) || anims?.[0];
+	function getAnimation(racer: Racer, name: string) {
+		const animations = racer.expand.pokemon?.animData?.AnimData?.Anims?.Anim;
+		return (
+			animations?.find((animation: { Name?: string }) => animation.Name === name) ?? animations?.[0]
+		);
 	}
 
 	function angleTo8DirectionIndex(angle: number): number {
-		// Normalize to 0-360°
 		const degrees = ((angle * 180) / Math.PI + 360) % 360;
-
-		if (degrees >= 337.5 || degrees < 22.5) return 2; // right
-		if (degrees >= 22.5 && degrees < 67.5) return 1; // down-right
-		if (degrees >= 67.5 && degrees < 112.5) return 0; // down
-		if (degrees >= 112.5 && degrees < 157.5) return 7; // down-left
-		if (degrees >= 157.5 && degrees < 202.5) return 6; // left
-		if (degrees >= 202.5 && degrees < 247.5) return 5; // up-left
-		if (degrees >= 247.5 && degrees < 292.5) return 4; // up ✅
-		if (degrees >= 292.5 && degrees < 337.5) return 3; // up-right
-
-		return 0; // default to down
+		if (degrees >= 337.5 || degrees < 22.5) return 2;
+		if (degrees < 67.5) return 1;
+		if (degrees < 112.5) return 0;
+		if (degrees < 157.5) return 7;
+		if (degrees < 202.5) return 6;
+		if (degrees < 247.5) return 5;
+		if (degrees < 292.5) return 4;
+		return 3;
 	}
 </script>
 
-<canvas class="" id="pixi-canvas" bind:this={canvasEl}></canvas>
+<canvas
+	id="pixi-canvas"
+	class:invisible={status !== 'ready'}
+	aria-label={`Race track for ${racetrack.name}`}
+	bind:this={canvasEl}
+></canvas>
+
+{#if status === 'loading'}
+	<div
+		class="absolute inset-0 z-50 flex items-center justify-center bg-black/80 text-white"
+		role="status"
+	>
+		Loading {racetrack.name}…
+	</div>
+{:else if status === 'error'}
+	<div
+		class="absolute inset-0 z-50 flex items-center justify-center bg-black/90 p-6 text-white"
+		role="alert"
+	>
+		<div class="max-w-md text-center">
+			<h2 class="text-xl font-bold">Race viewer could not load</h2>
+			<p class="mt-2">{errorMessage}</p>
+			<div class="mt-4 flex justify-center gap-3">
+				<button class="btn btn-primary" onclick={() => void initializeViewer()}>Retry</button>
+				<a class="btn" href="/races">Exit race</a>
+			</div>
+		</div>
+	</div>
+{/if}
