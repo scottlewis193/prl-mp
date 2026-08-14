@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { getUserContext } from '$lib/stores/user.svelte';
 	import pb from '$lib/pocketbase';
-	import { goto } from '$app/navigation';
+	import { applyAction, enhance } from '$app/forms';
+	import { finishClientLogout } from '$lib/clientSession';
 	const user = getUserContext();
 </script>
 
@@ -25,15 +26,18 @@
 				</div></summary
 			>
 			<ul class="menu dropdown-content bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm">
-				<li><a href={null}>Profile</a></li>
+				<li><a href="/settings">Profile</a></li>
 				<li>
-					<a
-						href={null}
-						onclick={() => {
-							pb.authStore.clear();
-							goto('/');
-						}}>Logout</a
+					<form
+						method="POST"
+						action="/logout"
+						use:enhance={() =>
+							async ({ result }) => {
+								await finishClientLogout(pb.authStore, result, applyAction);
+							}}
 					>
+						<button type="submit" class="w-full text-left">Logout</button>
+					</form>
 				</li>
 			</ul>
 		</details>

@@ -1,25 +1,6 @@
-import type { AuthModel, AuthRecord } from 'pocketbase';
 import { getContext, setContext } from 'svelte';
 import PocketBase from 'pocketbase';
 import type { User } from '$lib/types';
-
-const defaultUserOptions: {
-	raceViewer: { leaderboardMode: 'interval' | 'leader'; isViewing: boolean };
-} = {
-	raceViewer: {
-		leaderboardMode: 'interval',
-		isViewing: false
-	}
-};
-
-// export const defaultUser: User = {
-// 	id: '',
-// 	name: '',
-// 	email: '',
-// 	avatar: '',
-// 	options: defaultUserOptions,
-// 	watchlist: []
-// };
 
 const userKey = Symbol('user');
 
@@ -30,6 +11,13 @@ export function setUserContext(user: Partial<User>): Partial<User> {
 
 export function getUserContext(): User | null {
 	return getContext(userKey);
+}
+
+export function syncUserContext(target: Partial<User>, source: Partial<User>): void {
+	for (const key of Object.keys(target) as Array<keyof User>) {
+		if (!(key in source)) delete target[key];
+	}
+	Object.assign(target, source);
 }
 
 export async function subscribeToUsers(usersAry: User[], pb: PocketBase) {

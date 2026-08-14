@@ -2,11 +2,7 @@
 	import InstrumentDetails from '$lib/components/InstrumentDetails.svelte';
 	import RacerList from '$lib/components/RacerList.svelte';
 	import { setExchangePageContext } from '$lib/stores/exchange.svelte.js';
-	import { setUserContext } from '$lib/stores/user.svelte.js';
-	import type { User } from '$lib/types';
-	const { data } = $props();
 	let exchangePage = setExchangePageContext();
-	let user = setUserContext(data.user as User);
 </script>
 
 <div class="flex w-full justify-center">

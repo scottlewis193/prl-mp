@@ -3,7 +3,7 @@
 	import { getExchangePageContext } from '$lib/stores/exchange.svelte';
 	import { getPBContext } from '$lib/stores/pb.svelte';
 	import { getSymbol } from '$lib/stores/racer.svelte';
-	import { getUserContext } from '$lib/stores/user.svelte';
+	import { getUserContext, syncUserContext } from '$lib/stores/user.svelte';
 	import type { Racer } from '$lib/types';
 	import Chart from 'chart.js/auto';
 	import { onMount } from 'svelte';
@@ -13,7 +13,8 @@
 	let pb = getPBContext();
 	let exchangePage = getExchangePageContext();
 	const pokemon = racer?.expand?.pokemon;
-	const watchlist = user?.watchlist;
+	const watchlist = $derived(user?.watchlist ?? []);
+	let isUpdatingWatchlist = $state(false);
 
 	let chart: Chart;
 	let stockChart: HTMLCanvasElement | undefined = $state();
@@ -124,20 +125,23 @@
 		});
 	}
 
-	function updateWatchlist(event: MouseEvent) {
-		console.log(user);
-		if (!racer?.id || !watchlist || !user) return;
-		console.log('added to watchlist');
-		const target = event.target as HTMLInputElement;
+	async function updateWatchlist() {
+		if (!racer?.id || !user?.id || isUpdatingWatchlist) return;
 
-		const index = watchlist?.findIndex((racerId) => racerId === racer.id);
-		if (index === -1) {
-			watchlist.push(racer.id);
-			console.log('added to watchlist');
-		} else {
-			watchlist.splice(index, 1);
+		isUpdatingWatchlist = true;
+		const nextWatchlist = watchlist.includes(racer.id)
+			? watchlist.filter((racerId) => racerId !== racer.id)
+			: [...watchlist, racer.id];
+
+		try {
+			const updatedUser = await pb.collection('users').update(user.id, {
+				watchlist: nextWatchlist
+			});
+			pb.authStore.save(pb.authStore.token, updatedUser);
+			syncUserContext(user, updatedUser);
+		} finally {
+			isUpdatingWatchlist = false;
 		}
-		pb.collection('users').update(user.id, { watchlist });
 	}
 
 	function getOneDayHigh(racer: Racer) {
@@ -293,8 +297,9 @@
 								<input
 									type="checkbox"
 									checked={user?.watchlist?.includes(racer?.id || '')}
+									disabled={isUpdatingWatchlist}
 									class="mask mask-star-2 bg-orange-400"
-									onclick={(event) => updateWatchlist(event)}
+									onclick={() => updateWatchlist()}
 								/>
 							</div>
 						</div>

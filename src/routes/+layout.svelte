@@ -10,16 +10,22 @@
 	import { setRacetracksContext } from '$lib/stores/racetrack.svelte';
 
 	import { subscribeToPush } from '$lib/subscribe';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import '../app.css';
 	import type { User } from '$lib/types';
 	import { isAdministrativeUser } from '$lib/adminAuthorization';
+	import { setUserContext, syncUserContext } from '$lib/stores/user.svelte';
 
 	let { children, data } = $props();
 
-	const user: Partial<User> = $state(data?.user || {});
+	const user = setUserContext((data?.user ?? {}) as Partial<User>);
 	const url = $derived(page.url.pathname);
+
+	$effect(() => {
+		const latestUser = (data?.user ?? {}) as Partial<User>;
+		untrack(() => syncUserContext(user, latestUser));
+	});
 
 	//init client
 	const pb = setPBContext();
@@ -54,7 +60,7 @@
 		{#key data.url}
 			<div
 				transition:fade={{ duration: 200 }}
-				class={user?.options?.raceViewer.isViewing ? 'absolute h-full w-full' : ''}
+				class={user?.options?.raceViewer?.isViewing ? 'absolute h-full w-full' : ''}
 			>
 				{@render children()}
 			</div>
