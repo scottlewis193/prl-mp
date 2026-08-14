@@ -368,6 +368,7 @@ export type User = AuthRecord & {
 	};
 	watchlist: string[];
 	isFake: boolean;
+	isAdmin: boolean;
 };
 
 export type EventType = {

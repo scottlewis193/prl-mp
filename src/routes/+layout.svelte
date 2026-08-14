@@ -14,6 +14,7 @@
 	import { fade } from 'svelte/transition';
 	import '../app.css';
 	import type { User } from '$lib/types';
+	import { isAdministrativeUser } from '$lib/adminAuthorization';
 
 	let { children, data } = $props();
 
@@ -45,7 +46,9 @@
 {#if data.url !== '/login' && !data.url.startsWith('/races/')}
 	<div class="grid h-full grid-cols-1 grid-rows-[4rem_1fr_4rem]">
 		<div>
-			<Console />
+			{#if isAdministrativeUser(data.user)}
+				<Console />
+			{/if}
 			<TopBar />
 		</div>
 		{#key data.url}

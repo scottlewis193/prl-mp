@@ -1,6 +1,7 @@
 import { Race } from '$lib/types';
 import pb from './pocketbase';
 import { getRacers, getUnassignedRacers, updateRacer } from './racers';
+import { deleteAllRecords } from './recordDeletion';
 export async function createRace() {
 	const newRace = new Race();
 	const race = (await pb.collection('races').create(newRace)) as Race;
@@ -52,21 +53,16 @@ export async function getAllRaces() {
 }
 
 export async function deleteAllRaces() {
-	const races = await pb.collection('races').getFullList();
-	for (let race of races) {
-		try {
-			await pb.collection('races').delete(race.id);
-		} catch (error) {
-			console.log('nothing to delete');
-		}
-	}
+	await deleteAllRecords(pb.collection('races'));
 }
 
-export async function updateRace(id: string, updates: Partial<Race>) {
+export async function updateRace(id: string, updates: Partial<Race>): Promise<boolean> {
 	try {
 		await pb.collection('races').update(id, updates);
+		return true;
 	} catch (error) {
 		console.log('error updating race:', id);
+		return false;
 	}
 }
 
@@ -77,14 +73,19 @@ export async function startRace(raceId: string, startedAt = new Date()): Promise
 		return false;
 	}
 
-	await Promise.all(
+	const racerUpdates = await Promise.all(
 		raceRacers.map((racer) =>
 			updateRacer(racer.id || '0', {
 				currentRace: { ...racer.currentRace, lastUpdatedAt, finished: false }
 			})
 		)
 	);
+	if (racerUpdates.some((updated) => !updated)) {
+		throw new Error(`Failed to prepare every racer for race ${raceId}`);
+	}
 
-	await updateRace(raceId, { status: 'running', startTime: startedAt });
+	if (!(await updateRace(raceId, { status: 'running', startTime: startedAt }))) {
+		throw new Error(`Failed to mark race ${raceId} as running`);
+	}
 	return true;
 }

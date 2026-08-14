@@ -2,6 +2,7 @@ import type { Pokemon, Racer, Trainer } from '$lib/types';
 import pb from './pocketbase';
 import { selectUnassignedRacers } from './racerAssignment';
 import { selectRacerGender, selectRacerName } from './racerNames';
+import { deleteAllRecords } from './recordDeletion';
 
 // import { createRandomPokemon } from './pokemon';
 
@@ -19,11 +20,7 @@ import { selectRacerGender, selectRacerName } from './racerNames';
 // }
 
 export async function deleteAllRacers() {
-	const racersToDelete = await pb.collection('racers').getFullList();
-
-	for (let racer of racersToDelete) {
-		await pb.collection('racers').delete(racer.id);
-	}
+	await deleteAllRecords(pb.collection('racers'));
 }
 
 export async function getAllRacers() {

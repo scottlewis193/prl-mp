@@ -231,7 +231,7 @@ export const handle = async ({ event, resolve }) => {
 
 	if (!event.locals.user && DISABLE_AUTH == 'false') {
 		console.log('not logged in');
-		if (event.route.id !== '/login') {
+		if (event.route.id !== '/login' && event.route.id !== '/commands') {
 			// redirect to login if not logged in
 			throw redirect(303, '/login');
 		}

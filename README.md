@@ -36,6 +36,13 @@ Start SvelteKit in another terminal:
 npm run dev
 ```
 
+## Administrative console
+
+The command console is available only to the fixed service account or a user whose `isAdmin` field
+has been enabled by a PocketBase superuser. Set that field from the PocketBase dashboard; normal
+users cannot grant themselves administrative access through the API. Press the backtick key to open
+the console. The destructive command requires the full `/deleteallraces --confirm` form.
+
 ## Building
 
 ```sh
