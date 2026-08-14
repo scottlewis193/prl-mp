@@ -2,8 +2,9 @@
 	import { PUBLIC_PB_URL } from '$env/static/public';
 	import { getExchangePageContext } from '$lib/stores/exchange.svelte';
 	import { getPBContext } from '$lib/stores/pb.svelte';
-	import { getSymbol, type Racer } from '$lib/stores/racer.svelte';
+	import { getSymbol } from '$lib/stores/racer.svelte';
 	import { getUserContext } from '$lib/stores/user.svelte';
+	import type { Racer } from '$lib/types';
 	import Chart from 'chart.js/auto';
 	import { onMount } from 'svelte';
 
@@ -15,15 +16,14 @@
 	const watchlist = user?.watchlist;
 
 	let chart: Chart;
-	//svelte-ignore
-	let stockChart: HTMLCanvasElement;
+	let stockChart: HTMLCanvasElement | undefined = $state();
 	let chartLineColour: string;
 
 	let windowSize: { width: number; height: number } = $state({ width: 0, height: 0 });
 
 	function initChart() {
 		if (chart) chart.destroy();
-		if (!document.getElementById('stock-chart')) return;
+		if (!stockChart) return;
 		if (!racer) return;
 
 		const currentValueLine = {

@@ -47,10 +47,12 @@
 		"jsdom": "^26.1.0",
 		"nodemon": "^3.1.10",
 		"pixi-actions": "^1.2.4",
+		"pixi.js": "^8.11.0",
 		"pocketbase": "^0.26.1",
 		"uuid": "^11.1.0",
 		"vite-plugin-pwa": "^1.0.2",
-		"web-push": "^3.6.7"
+		"web-push": "^3.6.7",
+		"workbox-precaching": "^7.3.0"
 	},
 	"trustedDependencies": [
 		"@tailwindcss/oxide"

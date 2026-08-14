@@ -37,8 +37,8 @@ export async function subscribeToRacers(racersAry: Racer[], pb: PocketBase) {
 				case 'create':
 					racersAry.push(racerRecord);
 					break;
-			case 'update':
-				applyRacerUpdate(racersAry, racerRecord);
+				case 'update':
+					applyRacerUpdate(racersAry, racerRecord);
 
 					break;
 				case 'delete':

@@ -7,11 +7,7 @@ export function getWalkSpriteUrl(pokemon: Pokemon) {
 }
 
 export function getLeaderboardSpriteUrl(pokemon: Pokemon) {
-	if (
-		pokemon.id &&
-		!pokemon.id.startsWith('prlseedpoke') &&
-		pokemon.leaderboardImage
-	) {
+	if (pokemon.id && !pokemon.id.startsWith('prlseedpoke') && pokemon.leaderboardImage) {
 		return `/api/files/pokemon/${pokemon.id}/${pokemon.leaderboardImage}`;
 	}
 

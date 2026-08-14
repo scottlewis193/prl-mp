@@ -73,13 +73,7 @@ function createRecord(app, collectionName, id, data) {
 
 migrate(
 	function (app) {
-		var defaultTrackPath = $filepath.join(
-			$os.getwd(),
-			'src',
-			'lib',
-			'tracks',
-			'defaultTrack.json'
-		);
+		var defaultTrackPath = $filepath.join($os.getwd(), 'src', 'lib', 'tracks', 'defaultTrack.json');
 		var trackData = JSON.parse(toString($os.readFile(defaultTrackPath)));
 		var checkpoints = [];
 		var trackBounds = { x: 0, y: 0 };

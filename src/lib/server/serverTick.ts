@@ -84,7 +84,9 @@ async function simulateRaces() {
 		const raceRacers = racers.filter((r) => r.race === race.id);
 		const racetrack = racetracks.find((track) => track.id === race.racetrack) || racetracks[0];
 		if (!racetrack || racetrack.checkpoints.length < 2) {
-			console.error(`Cannot simulate race "${race.name}": its racetrack has fewer than two checkpoints.`);
+			console.error(
+				`Cannot simulate race "${race.name}": its racetrack has fewer than two checkpoints.`
+			);
 			continue;
 		}
 
@@ -162,7 +164,7 @@ async function simulateEvents() {
 				eventRaces.map(async (race) => {
 					//update races which have not started yet and past the start time
 					if (race.status == 'pending' && race.startTime.getUTCMilliseconds() <= now) {
-					await startRace(race.id || '0');
+						await startRace(race.id || '0');
 					}
 				})
 			);

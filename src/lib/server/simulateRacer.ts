@@ -25,9 +25,7 @@ export function simulateRacer(
 			y: 0
 		};
 	}
-	const speed = racer.currentRace.finished
-		? pokemon.speed / 7
-		: pokemon.speed + racer.stats.speed;
+	const speed = racer.currentRace.finished ? pokemon.speed / 7 : pokemon.speed + racer.stats.speed;
 
 	// Total distance to travel this tick
 	let distanceToTravel = racer.currentRace.distanceFromCheckpoint + speed * elapsed;

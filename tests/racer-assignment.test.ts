@@ -5,7 +5,10 @@ import { selectUnassignedRacers } from '../src/lib/server/racerAssignment';
 import type { Racer } from '../src/lib/types';
 
 test('selects only racers without a race assignment', () => {
-	const racers = [{ id: 'available', race: '' }, { id: 'assigned', race: 'race-1' }] as Racer[];
+	const racers = [
+		{ id: 'available', race: '' },
+		{ id: 'assigned', race: 'race-1' }
+	] as Racer[];
 
 	assert.deepEqual(
 		selectUnassignedRacers(racers).map((racer) => racer.id),

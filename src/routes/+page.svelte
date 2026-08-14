@@ -1,5 +1,4 @@
 <script lang="ts">
-
 	import type { AuthRecord } from 'pocketbase';
 
 	let { data }: { data: { user: AuthRecord; url: string } } = $props();
