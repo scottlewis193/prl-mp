@@ -1,15 +1,18 @@
 <script lang="ts">
-	let error = '';
-	let loading = $state(false);
+	import type { ActionData } from './$types';
 
-	let pageState: 'start' | 'login' | 'register' = $state('start');
-	//svelte-ignore non_reactive_update
-	let loginForm: HTMLFormElement;
-	//svelte-ignore non_reactive_update
-	let registerForm: HTMLFormElement;
+	let { form }: { form: ActionData } = $props();
+	const initialMode = form?.mode === 'login' || form?.mode === 'register' ? form.mode : 'start';
+	let pageState: 'start' | 'login' | 'register' = $state(initialMode);
 </script>
 
 <div class="flex h-full flex-col items-center gap-4 p-4">
+	{#if form?.mode === pageState && form.error}
+		<div class="alert alert-error mt-2">
+			<span>{form.error}</span>
+		</div>
+	{/if}
+
 	{#if pageState === 'start'}
 		<div class="flex h-full items-center justify-center">
 			<enhanced:img src="/static/logo-alt.png" alt="Logo" class="size-90" />
@@ -40,17 +43,11 @@
 			</svg>
 		</div>
 
-		{#if error}
-			<div class="alert alert-error mt-2">
-				<span>{error}</span>
-			</div>
-		{/if}
-
 		<form
 			id="login-form"
 			class="flex h-full w-full flex-col items-center justify-center gap-4"
-			bind:this={loginForm}
 			method="post"
+			action="?/login"
 		>
 			<div class="text-center text-3xl">Sign In</div>
 			<input
@@ -58,6 +55,7 @@
 				class="input input-lg"
 				type="email"
 				required
+				value={form?.mode === 'login' ? form.email : ''}
 				placeholder="mail@site.com"
 			/>
 
@@ -70,16 +68,8 @@
 			/>
 		</form>
 		<div class="flex h-16 w-full flex-col gap-4 lg:max-w-96">
-			<button
-				onclick={() => {
-					loading = true;
-					loginForm.submit();
-				}}
-				class="btn btn-lg btn-primary w-full lg:max-w-96"
-				type="button"
-				disabled={loading}
-			>
-				{loading ? 'Logging in...' : 'Login'}
+			<button form="login-form" class="btn btn-lg btn-primary w-full lg:max-w-96" type="submit">
+				Login
 			</button>
 		</div>
 	{:else if pageState === 'register'}
@@ -100,11 +90,12 @@
 				/>
 			</svg>
 		</div>
+
 		<form
 			id="register-form"
-			bind:this={registerForm}
 			class="flex h-full w-full flex-col items-center justify-center gap-4"
 			method="post"
+			action="?/register"
 		>
 			<div class="text-center text-3xl">Sign Up</div>
 			<input
@@ -112,6 +103,7 @@
 				class="input input-lg"
 				type="email"
 				required
+				value={form?.mode === 'register' ? form.email : ''}
 				placeholder="mail@site.com"
 			/>
 
@@ -120,28 +112,21 @@
 				type="password"
 				class="input input-lg"
 				required
+				minlength="8"
 				placeholder="Password"
 			/>
 
 			<input
-				name="confirmPassword"
+				name="passwordConfirm"
 				type="password"
 				class="input input-lg"
 				required
+				minlength="8"
 				placeholder="Confirm Password"
 			/>
 		</form>
-		<button
-			form="register-form"
-			onclick={() => {
-				loading = true;
-				registerForm.submit();
-			}}
-			class="btn btn-lg btn-primary w-full lg:max-w-96"
-			type="submit"
-			disabled={loading}
-		>
-			{loading ? 'Registering...' : 'Register'}
+		<button form="register-form" class="btn btn-lg btn-primary w-full lg:max-w-96" type="submit">
+			Register
 		</button>
 	{/if}
 </div>
