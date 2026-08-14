@@ -12,6 +12,13 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    env:
+      PUBLIC_PB_URL: http://127.0.0.1:8090
+      PB_USER: ''
+      PB_PASS: ''
+      DISABLE_AUTH: 'false'
+      PUBLIC_VAPID_PUBLIC_KEY: ''
+      VAPID_PRIVATE_KEY: ''
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
