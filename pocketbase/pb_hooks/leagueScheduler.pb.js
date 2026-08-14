@@ -1,0 +1,273 @@
+/// <reference path="../pb_data/types.d.ts" />
+
+routerAdd(
+	'POST',
+	'/api/prl/schedule/reconcile',
+	(e) => {
+		if (!e.auth || e.auth.id !== 'prlserviceuser0') {
+			throw e.forbiddenError('Only the simulator service account may reconcile schedules.', {});
+		}
+		const schedulerTimestamp = (record, field) => {
+			const value = record.getDateTime(field).string();
+			return value ? Date.parse(value) : Number.NaN;
+		};
+		const schedulerStatus = (record) => {
+			const status = new DynamicModel({ retired: false, injured: false });
+			record.unmarshalJSONField('status', status);
+			return status;
+		};
+		const schedulerRanking = (record) => {
+			const stats = new DynamicModel({ ranking: 0 });
+			record.unmarshalJSONField('stats', stats);
+			return Number(stats.ranking) || 0;
+		};
+
+		const body = e.requestInfo().body || {};
+		const nowMs = body.now === undefined ? Date.now() : Date.parse(body.now);
+		if (!Number.isFinite(nowMs)) throw e.badRequestError('now must be a valid date.', {});
+
+		const futureEventCount = Number(body.futureEventCount ?? 5);
+		const eventIntervalMs = Number(body.eventIntervalMs ?? 24 * 60 * 60 * 1000);
+		const scheduleOffsetMs = Number(body.scheduleOffsetMs ?? 14 * 60 * 60 * 1000);
+		const countdownMs = Number(body.countdownMs ?? 5 * 60 * 1000);
+		const totalLaps = Number(body.totalLaps ?? 5);
+		if (!Number.isInteger(futureEventCount) || futureEventCount < 1 || futureEventCount > 30) {
+			throw e.badRequestError('futureEventCount is outside the supported range.', {});
+		}
+		if (
+			!Number.isInteger(eventIntervalMs) ||
+			eventIntervalMs < 60 * 1000 ||
+			eventIntervalMs > 30 * 24 * 60 * 60 * 1000
+		) {
+			throw e.badRequestError('eventIntervalMs is outside the supported range.', {});
+		}
+		if (
+			!Number.isInteger(scheduleOffsetMs) ||
+			scheduleOffsetMs < 0 ||
+			scheduleOffsetMs >= eventIntervalMs
+		) {
+			throw e.badRequestError('scheduleOffsetMs is outside the supported range.', {});
+		}
+		if (!Number.isInteger(countdownMs) || countdownMs < 0 || countdownMs > eventIntervalMs) {
+			throw e.badRequestError('countdownMs is outside the supported range.', {});
+		}
+		if (!Number.isInteger(totalLaps) || totalLaps < 1 || totalLaps > 999) {
+			throw e.badRequestError('totalLaps is outside the supported range.', {});
+		}
+
+		const result = {
+			createdEvents: 0,
+			createdRaces: 0,
+			assignedRacers: 0,
+			transitionedRaces: 0
+		};
+
+		try {
+			e.app.runInTransaction((txApp) => {
+				const events = txApp
+					.findAllRecords('events')
+					.filter((event) => !event.getBool('finished'))
+					.sort(
+						(left, right) =>
+							schedulerTimestamp(left, 'startTime') - schedulerTimestamp(right, 'startTime') ||
+							left.id.localeCompare(right.id)
+					);
+				const eventByScheduleKey = {};
+				const eventByStartTime = {};
+				const leagues = txApp.findRecordsByFilter('leagues', 'id != ""', 'minRanking,id', 1000, 0);
+				const leagueById = {};
+				for (const league of leagues) leagueById[league.id] = league;
+				const availableRacers = txApp
+					.findRecordsByFilter('racers', 'race = ""', 'id', 5000, 0)
+					.filter((racer) => {
+						const status = schedulerStatus(racer);
+						return !status.retired && !status.injured;
+					})
+					.map((racer) => ({ racer, ranking: schedulerRanking(racer) }))
+					.sort(
+						(left, right) =>
+							left.ranking - right.ranking || left.racer.id.localeCompare(right.racer.id)
+					);
+				const takeAvailableRacers = (leagueId, count) => {
+					const selected = [];
+					for (let index = 0; index < availableRacers.length && selected.length < count; ) {
+						const candidate = availableRacers[index];
+						if (candidate.racer.getString('league') === leagueId) {
+							selected.push(candidate.racer);
+							availableRacers.splice(index, 1);
+						} else {
+							index += 1;
+						}
+					}
+					return selected;
+				};
+
+				for (const event of events) {
+					const eventStartMs = schedulerTimestamp(event, 'startTime');
+					const scheduleKey = event.getString('scheduleKey');
+					if (scheduleKey) eventByScheduleKey[scheduleKey] = event;
+					if (Number.isFinite(eventStartMs)) eventByStartTime[eventStartMs] = event;
+
+					const raceIds = event.getStringSlice('raceIds');
+					let allTerminal = raceIds.length > 0;
+					for (const raceId of raceIds) {
+						const race = txApp.findRecordById('races', raceId);
+						const currentStatus = race.getString('status');
+						let nextStatus = currentStatus;
+						let scheduledRacers;
+						if (currentStatus === 'pending' || currentStatus === 'countdown') {
+							scheduledRacers = txApp.findRecordsByFilter(
+								'racers',
+								'race = {:raceId}',
+								'id',
+								1000,
+								0,
+								{ raceId }
+							);
+							const league = leagueById[race.getString('league')];
+							if (league) {
+								const capacity = Math.max(1, league.getInt('maxPlayers'));
+								const backfill = takeAvailableRacers(league.id, capacity - scheduledRacers.length);
+								for (const racer of backfill) {
+									racer.set('race', race.id);
+									txApp.save(racer);
+									scheduledRacers.push(racer);
+									result.assignedRacers += 1;
+								}
+							}
+						}
+						if (
+							Number.isFinite(eventStartMs) &&
+							nowMs >= eventStartMs &&
+							(currentStatus === 'pending' || currentStatus === 'countdown')
+						) {
+							const racers = scheduledRacers || [];
+							nextStatus = racers.length > 0 ? 'running' : 'cancelled';
+							if (nextStatus === 'running') {
+								const scheduledStart = new Date(eventStartMs).toISOString();
+								for (const racer of racers) {
+									const currentRace = new DynamicModel({
+										lapsCompleted: 0,
+										checkpointIndex: 0,
+										distanceFromCheckpoint: 0,
+										lastUpdatedAt: '',
+										finished: false,
+										finishedAt: '',
+										lapStartTime: 0,
+										lapTimes: {},
+										bestLapTime: 0
+									});
+									racer.unmarshalJSONField('currentRace', currentRace);
+									currentRace.lapsCompleted = 0;
+									currentRace.checkpointIndex = 0;
+									currentRace.distanceFromCheckpoint = 0;
+									currentRace.lastUpdatedAt = scheduledStart;
+									currentRace.finished = false;
+									currentRace.finishedAt = '';
+									currentRace.lapStartTime = 0;
+									currentRace.lapTimes = {};
+									currentRace.bestLapTime = 0;
+									racer.set('currentRace', currentRace);
+									txApp.save(racer);
+								}
+							}
+						} else if (
+							Number.isFinite(eventStartMs) &&
+							nowMs >= eventStartMs - countdownMs &&
+							currentStatus === 'pending'
+						) {
+							nextStatus = 'countdown';
+						}
+
+						if (nextStatus !== currentStatus) {
+							race.set('status', nextStatus);
+							txApp.save(race);
+							result.transitionedRaces += 1;
+						}
+						if (!['finished', 'cancelled', 'settled'].includes(nextStatus)) allTerminal = false;
+					}
+
+					const shouldBeStarted = Number.isFinite(eventStartMs) && nowMs >= eventStartMs;
+					if (
+						event.getBool('started') !== shouldBeStarted ||
+						event.getBool('finished') !== allTerminal
+					) {
+						event.set('started', shouldBeStarted);
+						event.set('finished', allTerminal);
+						txApp.save(event);
+					}
+				}
+
+				let futureEvents = events.filter(
+					(event) => schedulerTimestamp(event, 'startTime') > nowMs
+				).length;
+				let slotMs =
+					Math.floor((nowMs - scheduleOffsetMs) / eventIntervalMs) * eventIntervalMs +
+					scheduleOffsetMs;
+				if (slotMs <= nowMs) slotMs += eventIntervalMs;
+
+				const racetracks = txApp.findRecordsByFilter('racetracks', 'id != ""', 'id', 1, 0);
+				if (racetracks.length === 0) {
+					throw e.badRequestError(
+						'At least one racetrack is required to schedule league races.',
+						{}
+					);
+				}
+
+				while (futureEvents < futureEventCount) {
+					const scheduleKey = `DailyLeagueRaces:${slotMs}`;
+					if (eventByScheduleKey[scheduleKey] || eventByStartTime[slotMs]) {
+						slotMs += eventIntervalMs;
+						continue;
+					}
+
+					const raceIds = [];
+					for (const league of leagues) {
+						const capacity = Math.max(1, league.getInt('maxPlayers'));
+						const selected = takeAvailableRacers(league.id, capacity);
+
+						const race = new Record(txApp.findCollectionByNameOrId('races'));
+						race.set(
+							'name',
+							`${league.getString('name')} Race — ${new Date(slotMs).toISOString()}`
+						);
+						race.set('status', 'pending');
+						race.set('league', league.id);
+						race.set('racetrack', racetracks[0].id);
+						race.set('startTime', new Date(slotMs).toISOString());
+						race.set('totalLaps', totalLaps);
+						txApp.save(race);
+						raceIds.push(race.id);
+						result.createdRaces += 1;
+
+						for (const racer of selected) {
+							racer.set('race', race.id);
+							txApp.save(racer);
+							result.assignedRacers += 1;
+						}
+					}
+
+					const event = new Record(txApp.findCollectionByNameOrId('events'));
+					event.set('type', 'DailyLeagueRaces');
+					event.set('scheduleKey', scheduleKey);
+					event.set('startTime', new Date(slotMs).toISOString());
+					event.set('raceIds', raceIds);
+					event.set('started', false);
+					event.set('finished', false);
+					txApp.save(event);
+					eventByScheduleKey[scheduleKey] = event;
+					eventByStartTime[slotMs] = event;
+					result.createdEvents += 1;
+					futureEvents += 1;
+					slotMs += eventIntervalMs;
+				}
+			});
+		} catch (error) {
+			e.app.logger().error('League schedule transaction failed', 'error', String(error));
+			throw error;
+		}
+
+		return e.json(200, result);
+	},
+	$apis.requireAuth('users')
+);

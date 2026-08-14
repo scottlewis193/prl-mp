@@ -6,6 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import PocketBase from 'pocketbase';
+import type { LeagueScheduleResult } from '../src/lib/leagueSchedule';
 
 const projectDirectory = resolve(import.meta.dirname, '..');
 const serviceEmail = 'simulator-test@example.com';
@@ -56,6 +57,54 @@ async function settle(client: PocketBase, raceId: string) {
 	}) as Promise<{ settled: boolean }>;
 }
 
+async function reconcileSchedule(
+	client: PocketBase,
+	now: string,
+	overrides: Record<string, number> = {}
+) {
+	return client.send('/api/prl/schedule/reconcile', {
+		method: 'POST',
+		body: {
+			now,
+			futureEventCount: 2,
+			eventIntervalMs: 60 * 60 * 1000,
+			scheduleOffsetMs: 0,
+			countdownMs: 5 * 60 * 1000,
+			totalLaps: 3,
+			...overrides
+		}
+	}) as Promise<LeagueScheduleResult>;
+}
+
+async function resetScheduleFixture(client: PocketBase): Promise<void> {
+	const events = await client.collection('events').getFullList();
+	await Promise.all(events.map((event) => client.collection('events').delete(event.id)));
+
+	const races = await client.collection('races').getFullList();
+	await Promise.all(
+		races
+			.filter((race) => race.id !== 'prlseedrace0001')
+			.map((race) => client.collection('races').delete(race.id))
+	);
+
+	const racers = await client.collection('racers').getFullList();
+	await Promise.all(
+		racers.map((racer) => client.collection('racers').update(racer.id, { race: null }))
+	);
+	await client.collection('races').update('prlseedrace0001', { status: 'settled' });
+}
+
+async function makeEveryRacerEligible(client: PocketBase): Promise<void> {
+	const racers = await client.collection('racers').getFullList();
+	await Promise.all(
+		racers.map((racer) =>
+			client.collection('racers').update(racer.id, {
+				status: { ...racer.status, injured: false, retired: false }
+			})
+		)
+	);
+}
+
 before(async () => {
 	dataDirectory = await mkdtemp(join(tmpdir(), 'prl-simulator-test-'));
 	const port = 18_000 + Math.floor(Math.random() * 10_000);
@@ -84,6 +133,8 @@ before(async () => {
 	await waitForPocketBase(baseUrl);
 	firstWorker = new PocketBase(baseUrl);
 	secondWorker = new PocketBase(baseUrl);
+	firstWorker.autoCancellation(false);
+	secondWorker.autoCancellation(false);
 	await Promise.all([
 		firstWorker.collection('users').authWithPassword(serviceEmail, servicePassword),
 		secondWorker.collection('users').authWithPassword(serviceEmail, servicePassword)
@@ -226,4 +277,191 @@ test('settles a finished race atomically and remains unchanged when settlement i
 		JSON.stringify(await secondWorker.collection('racers').getFullList({ sort: 'id' })),
 		beforeRetry
 	);
+});
+
+test('maintains the configured event pipeline without duplicate or overlapping assignments', async () => {
+	await resetScheduleFixture(firstWorker);
+	await firstWorker.collection('leagues').update('prlseeddemo0001', { maxPlayers: 4 });
+	const ineligibleRacer = await firstWorker.collection('racers').getOne('prlseedracer001');
+	await firstWorker.collection('racers').update(ineligibleRacer.id, {
+		status: { ...ineligibleRacer.status, injured: true }
+	});
+
+	const firstRun = await reconcileSchedule(firstWorker, '2026-08-14T12:05:00.000Z');
+	assert.deepEqual(firstRun, {
+		createdEvents: 2,
+		createdRaces: 2,
+		assignedRacers: 7,
+		transitionedRaces: 0
+	});
+
+	const secondRun = await reconcileSchedule(secondWorker, '2026-08-14T12:05:00.000Z');
+	assert.deepEqual(secondRun, {
+		createdEvents: 0,
+		createdRaces: 0,
+		assignedRacers: 0,
+		transitionedRaces: 0
+	});
+
+	const events = await firstWorker.collection('events').getFullList({ sort: 'startTime' });
+	const races = await firstWorker.collection('races').getFullList({
+		filter: 'league != ""',
+		sort: 'startTime'
+	});
+	const racers = await firstWorker.collection('racers').getFullList();
+
+	assert.equal(events.length, 2);
+	assert.equal(new Set(events.map((event) => event.scheduleKey)).size, 2);
+	assert.deepEqual(
+		events.map((event) => new Date(event.startTime).toISOString()),
+		['2026-08-14T13:00:00.000Z', '2026-08-14T14:00:00.000Z']
+	);
+	assert.equal(races.length, 2);
+	assert.equal(
+		races.every((race) => race.league === 'prlseeddemo0001'),
+		true
+	);
+	assert.deepEqual(
+		races.map((race) => racers.filter((racer) => racer.race === race.id).length),
+		[4, 3]
+	);
+	assert.equal(
+		racers
+			.filter((racer) => !racer.status.injured && !racer.status.retired)
+			.every((racer) => races.some((race) => race.id === racer.race)),
+		true
+	);
+	assert.equal(racers.find((racer) => racer.id === ineligibleRacer.id)?.race, '');
+});
+
+test('reconciles countdown and running transitions at scheduled times after a restart', async () => {
+	await resetScheduleFixture(firstWorker);
+	await makeEveryRacerEligible(firstWorker);
+	await firstWorker.collection('leagues').update('prlseeddemo0001', { maxPlayers: 8 });
+	await reconcileSchedule(firstWorker, '2026-08-14T12:00:00.000Z', { futureEventCount: 1 });
+
+	const [scheduledRace] = await firstWorker.collection('races').getFullList({
+		filter: 'league != ""'
+	});
+	assert.equal(scheduledRace.status, 'pending');
+
+	const countdownRun = await reconcileSchedule(secondWorker, '2026-08-14T12:55:00.000Z', {
+		futureEventCount: 1
+	});
+	assert.equal(countdownRun.transitionedRaces, 1);
+	assert.equal(
+		(await firstWorker.collection('races').getOne(scheduledRace.id)).status,
+		'countdown'
+	);
+
+	const startRun = await reconcileSchedule(firstWorker, '2026-08-14T13:00:00.000Z', {
+		futureEventCount: 1
+	});
+	assert.equal(startRun.transitionedRaces, 1);
+	const runningRace = await firstWorker.collection('races').getOne(scheduledRace.id);
+	const event = await firstWorker
+		.collection('events')
+		.getFirstListItem(`raceIds ?~ "${scheduledRace.id}"`);
+	assert.equal(runningRace.status, 'running');
+	assert.equal(new Date(runningRace.startTime).toISOString(), '2026-08-14T13:00:00.000Z');
+	assert.equal(event.started, true);
+
+	const restartRun = await reconcileSchedule(secondWorker, '2026-08-14T13:01:00.000Z', {
+		futureEventCount: 1
+	});
+	assert.equal(restartRun.transitionedRaces, 0);
+	assert.equal((await secondWorker.collection('races').getOne(scheduledRace.id)).status, 'running');
+});
+
+test('starts a missed pending schedule directly and remains idempotent after restart', async () => {
+	await resetScheduleFixture(firstWorker);
+	await reconcileSchedule(firstWorker, '2026-08-14T12:00:00.000Z', { futureEventCount: 1 });
+	const [scheduledRace] = await firstWorker.collection('races').getFullList({
+		filter: 'league != ""'
+	});
+
+	const recovered = await reconcileSchedule(secondWorker, '2026-08-14T13:01:00.000Z', {
+		futureEventCount: 1
+	});
+	assert.equal(recovered.transitionedRaces, 1);
+	assert.equal((await firstWorker.collection('races').getOne(scheduledRace.id)).status, 'running');
+
+	const retried = await reconcileSchedule(firstWorker, '2026-08-14T13:01:00.000Z', {
+		futureEventCount: 1
+	});
+	assert.equal(retried.transitionedRaces, 0);
+});
+
+test('replenishes the configured future pipeline after an event starts', async () => {
+	await resetScheduleFixture(firstWorker);
+	await makeEveryRacerEligible(firstWorker);
+	await firstWorker.collection('leagues').update('prlseeddemo0001', { maxPlayers: 4 });
+	await reconcileSchedule(firstWorker, '2026-08-14T12:00:00.000Z');
+
+	const replenished = await reconcileSchedule(secondWorker, '2026-08-14T13:00:00.000Z');
+	const futureEvents = (await firstWorker.collection('events').getFullList()).filter(
+		(event) => Date.parse(event.startTime) > Date.parse('2026-08-14T13:00:00.000Z')
+	);
+
+	assert.equal(replenished.createdEvents, 1);
+	assert.equal(futureEvents.length, 2);
+});
+
+test('backfills pending league races when eligible racers become available', async () => {
+	await resetScheduleFixture(firstWorker);
+	await makeEveryRacerEligible(firstWorker);
+	await firstWorker.collection('leagues').update('prlseeddemo0001', { maxPlayers: 4 });
+	await reconcileSchedule(firstWorker, '2026-08-14T12:00:00.000Z');
+	await reconcileSchedule(firstWorker, '2026-08-14T13:00:00.000Z');
+
+	const races = await firstWorker.collection('races').getFullList({
+		filter: 'league != ""',
+		sort: 'startTime'
+	});
+	const completedRace = races[0];
+	const unfilledRace = races[2];
+	const completedRacers = await firstWorker.collection('racers').getFullList({
+		filter: `race = "${completedRace.id}"`
+	});
+	await firstWorker.collection('races').update(completedRace.id, { status: 'settled' });
+	await Promise.all(
+		completedRacers.map((racer) =>
+			firstWorker.collection('racers').update(racer.id, { race: null })
+		)
+	);
+
+	const backfilled = await reconcileSchedule(secondWorker, '2026-08-14T13:30:00.000Z');
+	const assigned = await firstWorker.collection('racers').getFullList({
+		filter: `race = "${unfilledRace.id}"`
+	});
+
+	assert.equal(backfilled.assignedRacers, 4);
+	assert.equal(assigned.length, 4);
+});
+
+test('finds the live pipeline after more than one thousand historical events', async () => {
+	await resetScheduleFixture(firstWorker);
+	for (let batchStart = 0; batchStart < 1_001; batchStart += 100) {
+		await Promise.all(
+			Array.from({ length: Math.min(100, 1_001 - batchStart) }, (_, batchIndex) => {
+				const index = batchStart + batchIndex;
+				return firstWorker.collection('events').create({
+					type: 'DailyLeagueRaces',
+					scheduleKey: `historical:${index}`,
+					startTime: new Date(Date.UTC(2020, 0, 1) + index * 60_000).toISOString(),
+					raceIds: [],
+					started: true,
+					finished: true
+				});
+			})
+		);
+	}
+
+	await reconcileSchedule(firstWorker, '2026-08-14T12:00:00.000Z', { futureEventCount: 1 });
+	const retried = await reconcileSchedule(secondWorker, '2026-08-14T12:00:00.000Z', {
+		futureEventCount: 1
+	});
+
+	assert.equal(retried.createdEvents, 0);
+	assert.equal(retried.createdRaces, 0);
 });

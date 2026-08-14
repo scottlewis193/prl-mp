@@ -91,6 +91,7 @@ try {
 	const race = await pb.collection('races').create({
 		name: 'Schema Test Race',
 		status: 'pending',
+		league: league.id,
 		racetrack: racetrack.id,
 		startTime: new Date().toISOString(),
 		totalLaps: 5
@@ -123,6 +124,7 @@ try {
 
 	const event = await pb.collection('events').create({
 		type: 'DailyLeagueRaces',
+		scheduleKey: `schema-test-${Date.now()}`,
 		startTime: new Date().toISOString(),
 		raceIds: [race.id],
 		started: false,

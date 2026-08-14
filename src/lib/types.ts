@@ -5,6 +5,7 @@ export type RaceType = {
 	id?: string;
 	name: string;
 	status: 'pending' | 'countdown' | 'running' | 'finished' | 'cancelled' | 'settled';
+	league?: string;
 	racetrack: string;
 	winner: string;
 	finishingOrder: string[];
@@ -17,6 +18,7 @@ export class Race implements RaceType {
 	id?: string;
 	name: string = 'New Race';
 	status: 'pending' | 'countdown' | 'running' | 'finished' | 'cancelled' | 'settled' = 'pending';
+	league?: string;
 	racetrack: string = '175hl67e5pvjjib';
 	winner: string = '';
 	finishingOrder: string[] = [];
@@ -378,6 +380,7 @@ export type User = AuthRecord & {
 export type EventType = {
 	id: string;
 	type: 'DailyLeagueRaces';
+	scheduleKey?: string;
 	startTime: Date;
 	raceIds: string[];
 	started: boolean;

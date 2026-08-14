@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { Race, Racer, RaceTrack } from '$lib/types';
 import { buildRaceCompletion, shouldFinishRace } from './raceCompletion';
+import { reconcileLeagueSchedule } from './leagueScheduler';
 import { getRacers } from './racers';
 import { getFinishedRaces, getRunningRaces, settleRace } from './races';
 import { getAllRacetracks } from './racetracks';
@@ -47,6 +48,17 @@ async function runScheduledTick(): Promise<void> {
 async function serverTick(): Promise<void> {
 	await authenticateServer();
 	let lease = await claimSimulatorLease(ownerId, LEASE_TTL_MS);
+	if (!lease) return;
+	try {
+		const schedule = await reconcileLeagueSchedule();
+		if (schedule.createdEvents > 0 || schedule.transitionedRaces > 0) {
+			console.info('League race schedule reconciled.', { ownerId, ...schedule });
+		}
+	} catch (error) {
+		console.error('League race schedule reconciliation failed.', { ownerId, error });
+	}
+
+	lease = await claimSimulatorLease(ownerId, LEASE_TTL_MS);
 	if (!lease) return;
 
 	const [races, finishedRaces, racetracks] = await Promise.all([
