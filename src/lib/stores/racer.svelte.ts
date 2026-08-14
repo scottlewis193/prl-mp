@@ -49,7 +49,7 @@ export async function subscribeToRacers(racersAry: Racer[], pb: PocketBase) {
 					break;
 			}
 		},
-		{ expand: 'pokemon' }
+		{ expand: 'pokemon,trainer,league' }
 	);
 }
 
@@ -59,7 +59,8 @@ export async function unsubscribeFromRacers(pb: PocketBase) {
 }
 
 export function getSymbol(racer: Racer) {
-	const pokemon = racer.expand.pokemon as Pokemon;
+	const pokemon = racer.expand?.pokemon as Pokemon | undefined;
+	if (!racer.name || !pokemon?.name) return racer.name?.slice(0, 4).toUpperCase() || 'N/A';
 	const symbolChar1 = racer.name.charAt(0).toUpperCase();
 	const symbolChar2 = racer.name
 		.charAt(

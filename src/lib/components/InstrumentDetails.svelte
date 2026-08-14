@@ -1,125 +1,63 @@
 <script lang="ts">
 	import { PUBLIC_PB_URL } from '$env/static/public';
+	import ExchangeReadout from '$lib/components/ExchangeReadout.svelte';
+	import { getMarketSnapshot, getPriceHistoryForRange, type ChartRange } from '$lib/exchangeMarket';
+	import { formatMarketMovement, formatMarketPrice } from '$lib/exchangePresentation';
 	import { getExchangePageContext } from '$lib/stores/exchange.svelte';
 	import { getPBContext } from '$lib/stores/pb.svelte';
 	import { getSymbol } from '$lib/stores/racer.svelte';
 	import { getUserContext, syncUserContext } from '$lib/stores/user.svelte';
 	import type { Racer } from '$lib/types';
+	import { mutateWatchlist } from '$lib/watchlistMutation';
 	import Chart from 'chart.js/auto';
 	import { onMount } from 'svelte';
 
 	const { racer }: { racer: Racer | undefined } = $props();
-	let user = getUserContext();
-	let pb = getPBContext();
-	let exchangePage = getExchangePageContext();
-	const pokemon = racer?.expand?.pokemon;
+	const user = getUserContext();
+	const pb = getPBContext();
+	const exchangePage = getExchangePageContext();
+	const pokemon = $derived(racer?.expand?.pokemon);
+	const history = $derived(racer?.financials?.priceHistory ?? []);
+	const snapshot = $derived(getMarketSnapshot(history));
+	let selectedRange = $state<ChartRange>('1d');
+	const chartPoints = $derived(getPriceHistoryForRange(history, selectedRange));
 	const watchlist = $derived(user?.watchlist ?? []);
+	const holding = $derived(
+		racer?.ownership?.shareholders?.find((entry) => entry.playerId === user?.id)
+	);
 	let isUpdatingWatchlist = $state(false);
-
-	let chart: Chart;
+	let watchlistError = $state('');
+	let chart: Chart | undefined;
 	let stockChart: HTMLCanvasElement | undefined = $state();
-	let chartLineColour: string;
-
-	let windowSize: { width: number; height: number } = $state({ width: 0, height: 0 });
-
+	let chartLineColour = '#22c55e';
+	let mounted = $state(false);
+	let windowWidth = $state(0);
 	function initChart() {
-		if (chart) chart.destroy();
-		if (!stockChart) return;
-		if (!racer) return;
+		chart?.destroy();
+		chart = undefined;
+		if (!stockChart || chartPoints.length === 0) return;
 
-		const currentValueLine = {
-			id: 'currentValueLine',
-			beforeDatasetsDraw(chart: Chart, args: any, pluginOptions: any) {
-				const {
-					ctx,
-					chartArea: { top, bottom, left, right, width, height },
-					scales: { x, y }
-				} = chart;
-				ctx.save();
-				ctx.beginPath();
-				ctx.moveTo(
-					left,
-					y.getPixelForValue(
-						racer?.financials.priceHistory[racer.financials.priceHistory.length - 1].price || 0
-					)
-				);
-				ctx.lineTo(
-					right + 10,
-					y.getPixelForValue(
-						racer?.financials.priceHistory[racer.financials.priceHistory.length - 1].price || 0
-					)
-				);
-				ctx.strokeStyle = chartLineColour;
-				ctx.stroke();
-				ctx.closePath();
-				ctx.beginPath();
-				ctx.roundRect(
-					right + 7.5,
-					y.getPixelForValue(
-						racer.financials.priceHistory[racer.financials.priceHistory.length - 1].price
-					) - 8,
-					32,
-					15,
-					[5]
-				);
-				ctx.fillStyle = chartLineColour;
-				ctx.fill();
-				ctx.fillStyle = 'white';
-				ctx.fillText(
-					String(racer.financials.priceHistory[racer.financials.priceHistory.length - 1].price),
-					right + 12,
-					y.getPixelForValue(
-						racer.financials.priceHistory[racer.financials.priceHistory.length - 1].price
-					) + 3.5
-				);
-				ctx.restore();
-			}
-		};
-
-		//reinitialize chart when racer changes
 		chart = new Chart(stockChart, {
-			plugins: [currentValueLine],
 			type: 'line',
-
 			data: {
-				labels:
-					racer?.financials.priceHistory.map((entry) => new Date(entry.timestamp).getDate()) || [],
+				labels: chartPoints.map((point) => new Date(point.timestamp).toLocaleDateString()),
 				datasets: [
 					{
 						label: 'Price History',
-						data: racer.financials.priceHistory.map((entry) => entry.price),
+						data: chartPoints.map((point) => point.price),
 						borderColor: chartLineColour,
-						borderWidth: 1,
-						pointRadius: 0
+						borderWidth: 2,
+						pointRadius: chartPoints.length === 1 ? 3 : 0
 					}
 				]
 			},
 			options: {
 				responsive: true,
 				maintainAspectRatio: true,
-				layout: {
-					padding: 2
-				},
-				plugins: {
-					legend: {
-						display: false
-					}
-				},
-
+				plugins: { legend: { display: false } },
 				scales: {
-					y: {
-						position: 'right',
-						grid: {
-							display: false
-						}
-					},
-					x: {
-						position: 'bottom',
-						display: false,
-						grid: {
-							display: false
-						}
-					}
+					y: { position: 'right', grid: { display: false } },
+					x: { display: false, grid: { display: false } }
 				}
 			}
 		});
@@ -127,160 +65,72 @@
 
 	async function updateWatchlist() {
 		if (!racer?.id || !user?.id || isUpdatingWatchlist) return;
-
 		isUpdatingWatchlist = true;
-		const nextWatchlist = watchlist.includes(racer.id)
-			? watchlist.filter((racerId) => racerId !== racer.id)
-			: [...watchlist, racer.id];
-
+		watchlistError = '';
 		try {
-			const updatedUser = await pb.collection('users').update(user.id, {
-				watchlist: nextWatchlist
+			await mutateWatchlist({
+				current: watchlist,
+				racerId: racer.id,
+				apply: (next) => {
+					user.watchlist = [...next];
+				},
+				persist: async (next) => {
+					const updatedUser = await pb.collection('users').update(user.id, { watchlist: next });
+					pb.authStore.save(pb.authStore.token, updatedUser);
+					syncUserContext(user, updatedUser);
+					return Array.isArray(updatedUser.watchlist) ? [...updatedUser.watchlist] : next;
+				}
 			});
-			pb.authStore.save(pb.authStore.token, updatedUser);
-			syncUserContext(user, updatedUser);
+		} catch (error) {
+			watchlistError = error instanceof Error ? error.message : 'Could not update the watchlist.';
 		} finally {
 			isUpdatingWatchlist = false;
 		}
 	}
 
-	function getOneDayHigh(racer: Racer) {
-		const financials = racer.financials;
-		// filter data by today's date
-		const today = new Date();
-		const filteredData = financials.priceHistory.filter((data) => {
-			const date = new Date(data.timestamp);
-			return (
-				date.getDate() === today.getDate() &&
-				date.getMonth() === today.getMonth() &&
-				date.getFullYear() === today.getFullYear()
-			);
-		});
-		//work out the highest price
-		let highestPrice = Math.max(...filteredData.map((data) => data.price));
-
-		if (Math.abs(highestPrice) === Infinity) {
-			highestPrice = 0;
-		}
-
-		return highestPrice;
-	}
-
-	function getOneDayLow(racer: Racer) {
-		const financials = racer.financials;
-		// filter data by today's date
-		const today = new Date();
-		const filteredData = financials.priceHistory.filter((data) => {
-			const date = new Date(data.timestamp);
-			return (
-				date.getDate() === today.getDate() &&
-				date.getMonth() === today.getMonth() &&
-				date.getFullYear() === today.getFullYear()
-			);
-		});
-		//work out the lowest price
-		let lowestPrice = Math.min(...filteredData.map((data) => data.price));
-
-		if (Math.abs(lowestPrice) === Infinity) {
-			lowestPrice = 0;
-		}
-
-		return lowestPrice;
-	}
-
-	function get52WeekHigh(racer: Racer) {
-		const financials = racer.financials;
-		// filter data by today's date
-		const today = new Date();
-		const filteredData = financials.priceHistory.filter((data) => {
-			const date = new Date(data.timestamp);
-			return (
-				date.getDate() === today.getDate() &&
-				date.getMonth() === today.getMonth() &&
-				date.getFullYear() === today.getFullYear()
-			);
-		});
-		//work out the highest price
-		let highestPrice = Math.max(...filteredData.map((data) => data.price));
-
-		if (Math.abs(highestPrice) === Infinity) {
-			highestPrice = 0;
-		}
-
-		return highestPrice;
-	}
-
-	function get52WeekLow(racer: Racer) {
-		const financials = racer.financials;
-		// filter data by today's date
-		const today = new Date();
-		const filteredData = financials.priceHistory.filter((data) => {
-			const date = new Date(data.timestamp);
-			return (
-				date.getDate() === today.getDate() &&
-				date.getMonth() === today.getMonth() &&
-				date.getFullYear() === today.getFullYear()
-			);
-		});
-		//work out the lowest price
-		let lowestPrice = Math.min(...filteredData.map((data) => data.price));
-
-		if (Math.abs(lowestPrice) === Infinity) {
-			lowestPrice = 0;
-		}
-
-		return lowestPrice;
-	}
+	$effect(() => {
+		chartPoints;
+		selectedRange;
+		if (mounted) initChart();
+	});
 
 	onMount(() => {
-		chartLineColour = window
-			.getComputedStyle(document.documentElement)
-			.getPropertyValue('--color-primary');
-		windowSize.width = window.innerWidth;
-		windowSize.height = window.innerHeight;
+		mounted = true;
+		windowWidth = window.innerWidth;
+		chartLineColour =
+			window
+				.getComputedStyle(document.documentElement)
+				.getPropertyValue('--color-primary')
+				.trim() || chartLineColour;
+		if (windowWidth >= 1024) exchangePage.showDetails = true;
 		initChart();
-		if (windowSize.width >= 1024) {
-			exchangePage.showDetails = true;
-		}
+		return () => chart?.destroy();
 	});
 </script>
 
 <svelte:window
 	onresize={() => {
-		windowSize.width = window.innerWidth;
-		windowSize.height = window.innerHeight;
-		if (windowSize.width >= 1024) {
-			exchangePage.showDetails = true;
-		}
-		if (chart) {
-			chart.resize();
-		}
+		windowWidth = window.innerWidth;
+		if (windowWidth >= 1024) exchangePage.showDetails = true;
+		chart?.resize();
 	}}
 />
 
 {#if exchangePage.showDetails}
 	<div
-		class={'card bg-base-200 z-[500] col-start-1 col-end-3 row-start-1 row-end-3 max-h-[calc(100vh-10rem)] w-full lg:col-start-2'}
+		class="card bg-base-200 z-[500] col-start-1 col-end-3 row-start-1 row-end-3 max-h-[calc(100vh-10rem)] w-full lg:col-start-2"
 	>
 		{#if racer}
-			{#if windowSize.width < 1024}
-				<div class="flex min-h-8 w-full cursor-pointer items-center justify-end pt-4 pr-4">
-					<div
-						onclick={() => {
-							exchangePage.showDetails = false;
-						}}
+			{#if windowWidth < 1024}
+				<div class="flex min-h-8 w-full items-center justify-end pt-4 pr-4">
+					<button
+						class="btn btn-circle btn-ghost btn-sm"
+						type="button"
+						aria-label="Close racer details"
+						onclick={() => (exchangePage.showDetails = false)}
 					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke-width="1.5"
-							stroke="currentColor"
-							class="size-6"
-						>
-							<path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-						</svg>
-					</div>
+						<span aria-hidden="true">×</span>
+					</button>
 				</div>
 			{/if}
 			<div
@@ -290,128 +140,61 @@
 				<div class="flex items-center gap-6">
 					<div class="flex w-full flex-col">
 						<div class="text-primary text-xs">{getSymbol(racer)}</div>
-						<div class="flex gap-2">
-							<div class="text-lg">{racer?.name}</div>
-
-							<div class="rating">
-								<input
-									type="checkbox"
-									checked={user?.watchlist?.includes(racer?.id || '')}
-									disabled={isUpdatingWatchlist}
-									class="mask mask-star-2 bg-orange-400"
-									onclick={() => updateWatchlist()}
-								/>
-							</div>
+						<div class="flex items-center gap-2">
+							<div class="text-lg">{racer.name || 'Unknown racer'}</div>
+							<button
+								type="button"
+								disabled={isUpdatingWatchlist}
+								class="btn btn-circle btn-ghost btn-sm text-orange-400"
+								aria-label={watchlist.includes(racer.id || '')
+									? 'Remove from watchlist'
+									: 'Add to watchlist'}
+								aria-pressed={watchlist.includes(racer.id || '')}
+								onclick={updateWatchlist}
+							>
+								<span aria-hidden="true">{watchlist.includes(racer.id || '') ? '★' : '☆'}</span>
+							</button>
 						</div>
-						<div class="text-4xl">₽{racer?.financials.currentSharePrice}</div>
-						<div class="text-success text-xs">+1.00 (100%)</div>
+						<div class="text-4xl">{formatMarketPrice(snapshot.currentPrice)}</div>
+						<div
+							class="text-xs"
+							class:text-success={(snapshot.change ?? 0) > 0}
+							class:text-error={(snapshot.change ?? 0) < 0}
+						>
+							{formatMarketMovement(snapshot.change, snapshot.percentageChange)}
+						</div>
+						{#if watchlistError}
+							<p class="text-error text-sm" role="alert">
+								Watchlist update failed: {watchlistError}
+							</p>
+						{/if}
 					</div>
 
-					<img
-						style="image-rendering:pixelated"
-						class="size-15 rounded"
-						src={PUBLIC_PB_URL +
-							'/api/files/pokemon/' +
-							pokemon?.id +
-							'/' +
-							pokemon?.leaderboardImage}
-						alt={pokemon?.name}
-					/>
+					{#if pokemon?.id && pokemon.leaderboardImage}
+						<img
+							style="image-rendering:pixelated"
+							class="size-15 rounded"
+							src={`${PUBLIC_PB_URL}/api/files/pokemon/${pokemon.id}/${pokemon.leaderboardImage}`}
+							alt={pokemon.name}
+						/>
+					{/if}
 				</div>
-				{#if racer.financials.priceHistory.length > 0}
-					<div class="w-full">
-						<canvas bind:this={stockChart} id="stock-chart"></canvas>
-					</div>
-					<div class="flex w-full justify-center gap-2">
-						<button class="btn btn-sm btn-soft">1d</button>
-						<button class="btn btn-sm btn-soft">7d</button>
-						<button class="btn btn-sm btn-soft">1m</button>
-						<button class="btn btn-sm btn-soft">3m</button>
-						<button class="btn btn-sm btn-soft">6m</button>
-						<button class="btn btn-sm btn-soft">1y</button>
-						<button class="btn btn-sm btn-soft">All</button>
-					</div>
+
+				{#if history.length > 0}
+					<div class="w-full"><canvas bind:this={stockChart} id="stock-chart"></canvas></div>
 				{:else}
 					<div class="flex min-h-[224px] items-center justify-center text-center">
-						No data available
+						No price history available.
 					</div>
 				{/if}
-				<div class="flex flex-col gap-2 pt-2">
-					<h2 class="text-base">Your Investment</h2>
-					<div class="card bg-base-100">
-						<div class="card-body">
-							<div class="flex w-full justify-between">
-								<div class="font-bold uppercase">Value</div>
-								<div class="">₽1.00</div>
-							</div>
-							<div class="flex w-full justify-between">
-								<div class="font-bold uppercase">Return</div>
-								<div class="text-success">+₽0.00</div>
-							</div>
-							<div class="flex w-full justify-between">
-								<div class="font-bold uppercase">Shares</div>
-								<div class="">1.00</div>
-							</div>
-							<div class="flex w-full justify-between">
-								<div class="font-bold uppercase">Average Price</div>
-								<div class="">₽1.00</div>
-							</div>
-						</div>
-					</div>
-				</div>
-				<div class="flex flex-col gap-2">
-					<h2 class="text-base">Stats</h2>
-					<div class="card bg-base-100">
-						<div class="card-body">
-							<div class="flex w-full justify-center gap-4">
-								<div class="card w-full">
-									<div class="card-body bg-base-300 rounded-[var(--radius-box)]">
-										<div class="text-base font-bold uppercase">1 Day</div>
-										<div class="text-xs">High: ₽{getOneDayHigh(racer)}</div>
-										<div class="text-xs">Low: ₽{getOneDayLow(racer)}</div>
-									</div>
-								</div>
 
-								<div class="card w-full">
-									<div class="card-body bg-base-300 rounded-[var(--radius-box)]">
-										<div class="text-base font-bold uppercase">52 Weeks</div>
-										<div class="text-xs">High: ₽{get52WeekHigh(racer)}</div>
-										<div class="text-xs">Low: ₽{get52WeekLow(racer)}</div>
-									</div>
-								</div>
-							</div>
-							<div class="flex justify-between pt-4">
-								<div class="text-xs font-bold uppercase">P/E Ratio</div>
-								<div class="text-xs">{racer?.financials.earningsPerShare}</div>
-							</div>
-							<div class="flex justify-between">
-								<div class="text-xs font-bold uppercase">Market Cap</div>
-								<div class="text-xs">
-									₽{racer?.financials.outstandingShares * racer?.financials.currentSharePrice}
-								</div>
-							</div>
-						</div>
-					</div>
-				</div>
-				<div class="flex flex-col gap-2">
-					<h2 class="text-base">Financials</h2>
-					<div class="card bg-base-100">
-						<div class="card-body">WIP</div>
-					</div>
-				</div>
-
-				<div class="flex flex-col gap-2">
-					<h2 class="text-base">About</h2>
-					<div class="card bg-base-100">
-						<div class="card-body">WIP</div>
-					</div>
-				</div>
-			</div>
-			<div
-				class="bg-base-200 sticky bottom-0 left-0 flex h-18 w-full items-center justify-center gap-2 pb-4"
-			>
-				<button class="btn btn-primary w-[50%]">Buy</button>
-				<button class="btn btn-primary w-[50%]">Sell</button>
+				<ExchangeReadout
+					{racer}
+					{snapshot}
+					{holding}
+					hasPriceHistory={history.length > 0}
+					bind:selectedRange
+				/>
 			</div>
 		{:else}
 			<div class="flex h-full w-full items-center justify-center">
