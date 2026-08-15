@@ -5,8 +5,9 @@ import { once } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import PocketBase, { BaseAuthStore } from 'pocketbase';
+import type PocketBase from 'pocketbase';
 import type { LeagueScheduleResult } from '../src/lib/leagueSchedule';
+import { NodePocketBase } from './support/node-pocketbase';
 
 const projectDirectory = resolve(import.meta.dirname, '..');
 const serviceEmail = 'simulator-test@example.com';
@@ -135,8 +136,8 @@ before(async () => {
 	);
 
 	await waitForPocketBase(baseUrl);
-	firstWorker = new PocketBase(baseUrl, new BaseAuthStore());
-	secondWorker = new PocketBase(baseUrl, new BaseAuthStore());
+	firstWorker = new NodePocketBase(baseUrl);
+	secondWorker = new NodePocketBase(baseUrl);
 	firstWorker.autoCancellation(false);
 	secondWorker.autoCancellation(false);
 	await Promise.all([
