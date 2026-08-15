@@ -159,7 +159,6 @@ routerAdd(
 				throw e.badRequestError('A race must have participants before settlement.', {});
 			}
 
-			const rewardScaleByLeague = {};
 			const participants = [];
 			const racerById = {};
 			for (const racer of racers) {
@@ -176,11 +175,6 @@ routerAdd(
 					races: []
 				});
 				racer.unmarshalJSONField('raceHistory', history);
-				const leagueId = racer.getString('league');
-				if (rewardScaleByLeague[leagueId] === undefined) {
-					const league = txApp.findRecordById('leagues', leagueId);
-					rewardScaleByLeague[leagueId] = league.getFloat('prizeMoneyScaling');
-				}
 				const stats = new DynamicModel({
 					hp: 0,
 					attack: 0,
@@ -206,7 +200,6 @@ routerAdd(
 				racerById[racer.id] = racer;
 				participants.push({
 					id: racer.id,
-					leagueId,
 					finished: currentRace.finished,
 					finishedAt: currentRace.finishedAt || currentRace.lastUpdatedAt,
 					stats: {
@@ -240,10 +233,11 @@ routerAdd(
 			let plan;
 			try {
 				const settlementRules = require(`${__hooks}/raceSettlement.cjs`);
+				const storedPrizeCurve = race.get('prizeCurve');
 				plan = settlementRules.buildRaceSettlement({
 					raceId,
 					participants,
-					rewardScaleByLeague
+					prizeCurve: JSON.parse(toString(storedPrizeCurve))
 				});
 			} catch (error) {
 				throw e.badRequestError(error.message, {});
@@ -266,9 +260,25 @@ routerAdd(
 
 			race.set('winner', plan.race.winner);
 			race.set('finishingOrder', plan.race.finishingOrder);
+			race.set('awardedPrizes', plan.race.awardedPrizes);
 			race.set('endTime', plan.race.endTime);
 			race.set('status', plan.race.status);
 			txApp.save(race);
+
+			const settlementEvent = new Record(txApp.findCollectionByNameOrId('events'));
+			settlementEvent.set('type', 'RaceSettled');
+			settlementEvent.set('idempotencyKey', `race-settled:${raceId}`);
+			settlementEvent.set('occurredAt', plan.race.endTime);
+			settlementEvent.set('raceIds', [raceId]);
+			settlementEvent.set('started', true);
+			settlementEvent.set('finished', true);
+			settlementEvent.set('facts', {
+				raceId,
+				winnerId: plan.race.winner,
+				finishingOrder: plan.race.finishingOrder,
+				awardedPrizes: plan.race.awardedPrizes
+			});
+			txApp.save(settlementEvent);
 			settled = true;
 		});
 

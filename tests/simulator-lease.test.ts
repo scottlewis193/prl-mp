@@ -202,6 +202,52 @@ test('excludes concurrent owners and permits recovery after the lease expires', 
 	assert.equal(persistedRacer.positioning.x, 222);
 });
 
+test('rolls back every settlement effect when the durable event write fails', async () => {
+	const raceId = 'prlseedrace0001';
+	const racers = await firstWorker.collection('racers').getFullList({
+		filter: `race = "${raceId}"`,
+		sort: 'id'
+	});
+	await Promise.all(
+		racers.map((racer, index) => {
+			const finishedAt = new Date(Date.UTC(2026, 7, 14, 11, 59, index)).toISOString();
+			return firstWorker.collection('racers').update(racer.id, {
+				currentRace: { ...racer.currentRace, finished: true, finishedAt }
+			});
+		})
+	);
+	await firstWorker.collection('races').update(raceId, { status: 'finished' });
+	const blockingEvent = await firstWorker.collection('events').create({
+		type: 'RaceSettled',
+		idempotencyKey: `race-settled:${raceId}`,
+		occurredAt: '2026-08-14T12:00:00.000Z',
+		raceIds: [raceId],
+		started: true,
+		finished: true,
+		facts: { testFixture: 'force the unique event write to fail' }
+	});
+	const before = JSON.stringify({
+		race: await firstWorker.collection('races').getOne(raceId),
+		racers: await firstWorker.collection('racers').getFullList({ sort: 'id' }),
+		events: await firstWorker.collection('events').getFullList({ sort: 'id' })
+	});
+
+	await assert.rejects(
+		() => settle(firstWorker, raceId),
+		(error: { status?: number }) => error.status === 400
+	);
+
+	assert.equal(
+		JSON.stringify({
+			race: await firstWorker.collection('races').getOne(raceId),
+			racers: await firstWorker.collection('racers').getFullList({ sort: 'id' }),
+			events: await firstWorker.collection('events').getFullList({ sort: 'id' })
+		}),
+		before
+	);
+	await firstWorker.collection('events').delete(blockingEvent.id);
+});
+
 test('settles a finished race atomically and remains unchanged when settlement is retried', async () => {
 	const raceId = 'prlseedrace0001';
 	const finishedAt = '2026-08-14T12:00:08.000Z';
@@ -272,6 +318,9 @@ test('settles a finished race atomically and remains unchanged when settlement i
 		),
 		true
 	);
+	await firstWorker.collection('leagues').update('prlseeddemo0001', {
+		prizeMoneyScaling: 100
+	});
 
 	assert.deepEqual(await settle(firstWorker, raceId), { settled: true });
 
@@ -291,6 +340,24 @@ test('settles a finished race atomically and remains unchanged when settlement i
 		settledRacers.every((racer) => racer.race === ''),
 		true
 	);
+	assert.deepEqual(
+		settledRace.awardedPrizes,
+		[...racers].reverse().map((racer, index) => ({
+			racerId: racer.id,
+			position: index + 1,
+			amount: 8 - index
+		}))
+	);
+	const settlementEvents = await firstWorker.collection('events').getFullList({
+		filter: `idempotencyKey = "race-settled:${raceId}"`
+	});
+	assert.equal(settlementEvents.length, 1);
+	assert.deepEqual(settlementEvents[0].facts, {
+		raceId,
+		winnerId: racers.at(-1)?.id,
+		finishingOrder: [...racers].reverse().map((racer) => racer.id),
+		awardedPrizes: settledRace.awardedPrizes
+	});
 	const settledWagers = await firstWorker.collection('wagers').getFullList({ sort: 'selection' });
 	assert.deepEqual(
 		settledWagers.map((wager) => ({
@@ -312,7 +379,8 @@ test('settles a finished race atomically and remains unchanged when settlement i
 			totalRaces: racer.raceHistory.totalRaces,
 			wins: racer.raceHistory.wins,
 			ranking: racer.stats.ranking,
-			totalEarnings: racer.financials.totalEarnings
+			totalEarnings: racer.financials.totalEarnings,
+			averageFinishPosition: racer.raceHistory.averageFinishPosition
 		})),
 		Array.from({ length: racers.length }, (_, index) => ({
 			position: racers.length - index,
@@ -320,13 +388,15 @@ test('settles a finished race atomically and remains unchanged when settlement i
 			totalRaces: 1,
 			wins: index === racers.length - 1 ? 1 : 0,
 			ranking: racers.length - index,
-			totalEarnings: index + 1
+			totalEarnings: index + 1,
+			averageFinishPosition: racers.length - index
 		}))
 	);
 
 	const beforeRetry = JSON.stringify({
 		racers: settledRacers,
 		wagers: settledWagers,
+		events: settlementEvents,
 		balance: refreshedAfterPayout.record.balance
 	});
 	assert.deepEqual(await settle(secondWorker, raceId), { settled: false });
@@ -334,9 +404,47 @@ test('settles a finished race atomically and remains unchanged when settlement i
 		JSON.stringify({
 			racers: await secondWorker.collection('racers').getFullList({ sort: 'id' }),
 			wagers: await secondWorker.collection('wagers').getFullList({ sort: 'selection' }),
+			events: await secondWorker.collection('events').getFullList({
+				filter: `idempotencyKey = "race-settled:${raceId}"`
+			}),
 			balance: (await secondWorker.collection('users').authRefresh()).record.balance
 		}),
 		beforeRetry
+	);
+	await firstWorker.collection('leagues').update('prlseeddemo0001', { prizeMoneyScaling: 1 });
+});
+
+test('cancelled and invalid races award no prizes or career progression', async () => {
+	const raceId = 'prlseedrace0001';
+	const racer = await firstWorker.collection('racers').getOne('prlseedracer001');
+	await firstWorker.collection('racers').update(racer.id, {
+		race: raceId,
+		currentRace: { ...racer.currentRace, finished: false, finishedAt: '' }
+	});
+	await firstWorker.collection('races').update(raceId, {
+		status: 'cancelled',
+		awardedPrizes: []
+	});
+	const beforeCancelled = await firstWorker.collection('racers').getOne(racer.id);
+
+	await assert.rejects(() => settle(firstWorker, raceId), /only finished races/i);
+	assert.deepEqual(await firstWorker.collection('racers').getOne(racer.id), beforeCancelled);
+
+	await firstWorker.collection('races').update(raceId, { status: 'finished' });
+	const beforeInvalid = await firstWorker.collection('racers').getOne(racer.id);
+	await assert.rejects(
+		() => settle(firstWorker, raceId),
+		(error: { status?: number }) => error.status === 400
+	);
+	assert.deepEqual(await firstWorker.collection('racers').getOne(racer.id), beforeInvalid);
+	assert.deepEqual((await firstWorker.collection('races').getOne(raceId)).awardedPrizes, []);
+	assert.equal(
+		(
+			await firstWorker.collection('events').getFullList({
+				filter: `idempotencyKey = "race-settled:${raceId}"`
+			})
+		).length,
+		1
 	);
 });
 
@@ -493,8 +601,21 @@ test('maintains the configured event pipeline without duplicate or overlapping a
 		true
 	);
 	assert.deepEqual(
+		races.map((race) => race.prizeCurve),
+		[
+			[4, 3, 2, 1],
+			[3, 2, 1]
+		]
+	);
+	assert.deepEqual(
 		races.map((race) => racers.filter((racer) => racer.race === race.id).length),
 		[4, 3]
+	);
+	assert.equal(
+		races.every(
+			(race) => race.prizeCurve.length === racers.filter((racer) => racer.race === race.id).length
+		),
+		true
 	);
 	assert.equal(
 		racers
@@ -608,6 +729,10 @@ test('backfills pending league races when eligible racers become available', asy
 
 	assert.equal(backfilled.assignedRacers, 4);
 	assert.equal(assigned.length, 4);
+	assert.deepEqual(
+		(await firstWorker.collection('races').getOne(unfilledRace.id)).prizeCurve,
+		[4, 3, 2, 1]
+	);
 });
 
 test('finds the live pipeline after more than one thousand historical events', async () => {

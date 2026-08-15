@@ -43,6 +43,20 @@
 		</section>
 	{/if}
 
+	{#if racePresentation.prizeStructure.length > 0}
+		<section aria-labelledby="prizes-heading">
+			<h2 id="prizes-heading" class="mb-3 text-xl font-semibold">Prize structure</h2>
+			<ol class="rounded-box border-base-300 bg-base-200 divide-base-300 divide-y border">
+				{#each racePresentation.prizeStructure as prize}
+					<li class="flex items-center justify-between gap-4 p-4">
+						<strong>{ordinal(prize.position)}</strong>
+						<span>{prize.amount.toLocaleString('en-GB')} PokéD</span>
+					</li>
+				{/each}
+			</ol>
+		</section>
+	{/if}
+
 	<section aria-labelledby="results-heading">
 		<h2 id="results-heading" class="mb-3 text-xl font-semibold">Finishing results</h2>
 		{#if racePresentation.results.length > 0}
@@ -50,7 +64,10 @@
 				{#each racePresentation.results as result}
 					<li class="flex items-center gap-4 p-4">
 						<strong class="w-10 text-lg">{ordinal(result.position)}</strong>
-						<span>{result.racerName}</span>
+						<span class="flex-1">{result.racerName}</span>
+						{#if result.prizeMoney !== undefined}
+							<span>{result.prizeMoney.toLocaleString('en-GB')} PokéD awarded</span>
+						{/if}
 					</li>
 				{/each}
 			</ol>

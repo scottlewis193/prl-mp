@@ -30,14 +30,18 @@ test('builds progression and configured rewards for every finisher', () => {
 		settlementRacer('racer-a', '2026-08-14T12:00:01.000Z', { ranking: 12 })
 	];
 
-	const settlement = buildRaceSettlement(race, racers, { 'league-1': 2 });
+	const settlement = buildRaceSettlement(race, racers, [4, 2]);
 
 	assert.deepEqual(settlement.race, {
 		id: 'race-1',
 		status: 'settled',
 		winner: 'racer-a',
 		endTime: '2026-08-14T12:00:02.000Z',
-		finishingOrder: ['racer-a', 'racer-b']
+		finishingOrder: ['racer-a', 'racer-b'],
+		awardedPrizes: [
+			{ racerId: 'racer-a', position: 1, amount: 4 },
+			{ racerId: 'racer-b', position: 2, amount: 2 }
+		]
 	});
 	assert.deepEqual(
 		settlement.racers.map((racer) => ({

@@ -48,6 +48,8 @@ const baseRace = {
 	racetrack: 'track-1',
 	winner: '',
 	finishingOrder: [],
+	prizeCurve: [30, 20],
+	awardedPrizes: [],
 	endTime: '2026-08-15T13:30:00Z',
 	totalLaps: 3
 };
@@ -117,7 +119,12 @@ test('completed race detail names the winner and displays finishing results', as
 			status: 'settled',
 			startTime: '2026-08-15T12:00:00Z',
 			winner: 'racer-2',
-			finishingOrder: ['racer-2', 'racer-1']
+			finishingOrder: ['racer-2', 'racer-1'],
+			prizeCurve: [],
+			awardedPrizes: [
+				{ racerId: 'racer-2', position: 1, amount: 30 },
+				{ racerId: 'racer-1', position: 2, amount: 20 }
+			]
 		};
 		const body = render(component, { props: { race, racers, racetrack: track } }).body;
 
@@ -125,7 +132,31 @@ test('completed race detail names the winner and displays finishing results', as
 		assert.match(body, /Dash/);
 		assert.match(body, /1st/);
 		assert.match(body, /2nd/);
+		assert.match(body, /30 PokéD/);
+		assert.match(body, /20 PokéD/);
+		assert.doesNotMatch(body, /Prize structure/i);
 		assert.ok(body.indexOf('Dash') < body.indexOf('Bolt'));
+	} finally {
+		await cleanup();
+	}
+});
+
+test('scheduled race detail displays its snapshotted prize structure', async () => {
+	const { component, cleanup } = await serverComponent('RaceDetail');
+	try {
+		const race = {
+			...baseRace,
+			id: 'race-upcoming',
+			status: 'pending',
+			startTime: '2026-08-16T12:00:00Z'
+		};
+		const body = render(component, { props: { race, racers, racetrack: track } }).body;
+
+		assert.match(body, /Prize structure/i);
+		assert.match(body, /1st/);
+		assert.match(body, /30 PokéD/);
+		assert.match(body, /2nd/);
+		assert.match(body, /20 PokéD/);
 	} finally {
 		await cleanup();
 	}
