@@ -1,0 +1,197 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import test from 'node:test';
+import { compile } from 'svelte/compiler';
+import { render } from 'svelte/server';
+
+async function serverDashboard() {
+	const source = await readFile(
+		new URL('../src/lib/components/Dashboard.svelte', import.meta.url),
+		'utf8'
+	);
+	const { js } = compile(source, {
+		filename: 'src/lib/components/Dashboard.svelte',
+		generate: 'server'
+	});
+	const directory = await mkdtemp(join(tmpdir(), 'dashboard-component-'));
+	const modulePath = join(directory, 'Dashboard.js');
+	await writeFile(
+		modulePath,
+		js.code
+			.replace(
+				"'svelte/internal/server'",
+				JSON.stringify(
+					new URL('../node_modules/svelte/src/internal/server/index.js', import.meta.url).href
+				)
+			)
+			.replace(
+				"'$lib/exchangePresentation'",
+				JSON.stringify(new URL('../src/lib/exchangePresentation.ts', import.meta.url).href)
+			)
+			.replace(
+				"'$lib/raceDiscovery'",
+				JSON.stringify(new URL('../src/lib/raceDiscovery.ts', import.meta.url).href)
+			)
+	);
+	return {
+		component: (await import(pathToFileURL(modulePath).href)).default,
+		modulePath,
+		cleanup: () => rm(directory, { recursive: true })
+	};
+}
+
+async function serverDashboardPage() {
+	const dashboard = await serverDashboard();
+	const source = await readFile(new URL('../src/routes/+page.svelte', import.meta.url), 'utf8');
+	const { js } = compile(source, { filename: 'src/routes/+page.svelte', generate: 'server' });
+	const directory = await mkdtemp(join(tmpdir(), 'dashboard-page-'));
+	const modulePath = join(directory, 'Page.js');
+	await writeFile(
+		modulePath,
+		js.code
+			.replace(
+				"'svelte/internal/server'",
+				JSON.stringify(
+					new URL('../node_modules/svelte/src/internal/server/index.js', import.meta.url).href
+				)
+			)
+			.replace(
+				"'$lib/components/Dashboard.svelte'",
+				JSON.stringify(pathToFileURL(dashboard.modulePath).href)
+			)
+	);
+	return {
+		component: (await import(pathToFileURL(modulePath).href)).default,
+		cleanup: async () => {
+			await dashboard.cleanup();
+			await rm(directory, { recursive: true });
+		}
+	};
+}
+
+const populatedDashboard = {
+	account: { balance: 9_970, change: -30, period: 'Last 24 hours' as const },
+	portfolio: {
+		costBasis: 100,
+		marketValue: 120,
+		gain: 20,
+		gainPercent: 20,
+		holdings: [
+			{
+				racerId: 'racer-1',
+				racerName: 'Bolt',
+				quantity: 10,
+				costBasis: 100,
+				currentPrice: 12,
+				marketValue: 120,
+				gain: 20,
+				gainPercent: 20
+			}
+		]
+	},
+	upcomingRaces: [
+		{
+			id: 'race-upcoming',
+			name: 'Johto Sprint',
+			status: 'pending',
+			trackName: 'Johto Circuit',
+			startTime: '2026-08-15T13:00:00Z'
+		}
+	],
+	recentResults: [
+		{
+			id: 'race-recent',
+			name: 'Indigo Cup',
+			trackName: 'Indigo Circuit',
+			winnerName: 'Bolt',
+			startTime: '2026-08-15T10:00:00Z'
+		}
+	],
+	watchedActivity: [
+		{
+			racerId: 'racer-1',
+			racerName: 'Bolt',
+			description: 'Price moved to ₽12 · Race win',
+			timestamp: '2026-08-15T11:30:00Z'
+		}
+	]
+};
+
+test('dashboard renders live account, holdings, race and watched-racer information', async () => {
+	const { component, cleanup } = await serverDashboard();
+	try {
+		const body = render(component, { props: { dashboard: populatedDashboard } }).body;
+		assert.match(body, /₽9,970/);
+		assert.match(body, /-₽30/);
+		assert.match(body, /Last 24 hours/);
+		assert.match(body, /Holdings performance/i);
+		assert.match(body, /Bolt/);
+		assert.match(body, /₽120/);
+		assert.match(body, /\+20\.00%/);
+		assert.match(body, /Johto Sprint/);
+		assert.match(body, /Johto Circuit/);
+		assert.match(body, /Indigo Cup/);
+		assert.match(body, /Winner: Bolt/);
+		assert.match(body, /Price moved to ₽12 · Race win/);
+		assert.doesNotMatch(body, /Send Test Notification|Avatar Tailwind|>Test</);
+	} finally {
+		await cleanup();
+	}
+});
+
+test('dashboard renders useful loading, backend-error and section-level empty states', async () => {
+	const { component, cleanup } = await serverDashboard();
+	try {
+		assert.match(render(component, { props: { loading: true } }).body, /Loading dashboard/i);
+		assert.match(
+			render(component, { props: { error: 'Could not load your dashboard. Please try again.' } })
+				.body,
+			/Could not load your dashboard.*Please try again/i
+		);
+		const empty = render(component, {
+			props: {
+				dashboard: {
+					account: { balance: 0, change: 0, period: 'Last 24 hours' },
+					portfolio: {
+						costBasis: 0,
+						marketValue: 0,
+						gain: 0,
+						gainPercent: null,
+						holdings: []
+					},
+					upcomingRaces: [],
+					recentResults: [],
+					watchedActivity: []
+				}
+			}
+		}).body;
+		assert.match(empty, /No holdings yet/i);
+		assert.match(empty, /No upcoming races are scheduled/i);
+		assert.match(empty, /No recent results yet/i);
+		assert.match(empty, /No watched-racer activity yet/i);
+	} finally {
+		await cleanup();
+	}
+});
+
+test('dashboard page visibly loads while streamed live data is pending', async () => {
+	const { component, cleanup } = await serverDashboardPage();
+	try {
+		const pendingDashboard = new Promise(() => undefined);
+		const loadingBody = render(component, {
+			props: { data: { dashboardState: pendingDashboard } }
+		}).body;
+		assert.match(loadingBody, /Loading dashboard/i);
+		const readyBody = render(component, {
+			props: {
+				data: { dashboardState: { dashboard: populatedDashboard, error: null } }
+			}
+		}).body;
+		assert.match(readyBody, /₽9,970/);
+	} finally {
+		await cleanup();
+	}
+});

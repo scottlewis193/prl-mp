@@ -1,0 +1,248 @@
+import { formatMarketPrice } from './exchangePresentation';
+import type { RaceType } from './types';
+
+type RaceStatus = RaceType['status'];
+
+export type DashboardLedgerEntry = {
+	balanceDelta: number;
+	balanceAfter: number;
+	occurredAt: string;
+};
+
+export type DashboardHoldingRecord = {
+	player: string;
+	racer: string;
+	quantity: number;
+	costBasis: number;
+};
+
+export type DashboardRacerRecord = {
+	id?: string;
+	name: string;
+	financials?: {
+		currentSharePrice?: number;
+		priceHistory?: { timestamp: string; price: number; reason?: string }[];
+	};
+	raceHistory?: {
+		races?: { raceId: string; position: number; prizeMoney: number; date: string }[];
+	};
+};
+
+export type DashboardRaceRecord = {
+	id?: string;
+	name: string;
+	status: RaceStatus;
+	racetrack?: string;
+	winner?: string;
+	startTime: Date | string;
+};
+
+export type DashboardTrackRecord = { id: string; name: string };
+
+export type DashboardHolding = {
+	racerId: string;
+	racerName: string;
+	quantity: number;
+	costBasis: number;
+	currentPrice: number | null;
+	marketValue: number | null;
+	gain: number | null;
+	gainPercent: number | null;
+};
+
+export type DashboardRace = {
+	id: string;
+	name: string;
+	status: RaceStatus;
+	trackName: string;
+	startTime: Date | string;
+};
+
+export type DashboardResult = Omit<DashboardRace, 'status'> & { winnerName: string };
+
+export type DashboardActivity = {
+	racerId: string;
+	racerName: string;
+	description: string;
+	timestamp: string;
+};
+
+export type DashboardView = {
+	account: { balance: number; change: number; period: 'Last 24 hours' };
+	portfolio: {
+		costBasis: number;
+		marketValue: number | null;
+		gain: number | null;
+		gainPercent: number | null;
+		holdings: DashboardHolding[];
+	};
+	upcomingRaces: DashboardRace[];
+	recentResults: DashboardResult[];
+	watchedActivity: DashboardActivity[];
+};
+
+type DashboardInput = {
+	balance: number;
+	ledger: DashboardLedgerEntry[];
+	holdings: DashboardHoldingRecord[];
+	racers: DashboardRacerRecord[];
+	races: DashboardRaceRecord[];
+	racetracks: DashboardTrackRecord[];
+	watchlist: string[];
+	now?: Date;
+};
+
+function timestampOrZero(value: Date | string): number {
+	const timestamp = new Date(value).getTime();
+	return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function ordinal(position: number): string {
+	const mod100 = position % 100;
+	if (mod100 >= 11 && mod100 <= 13) return `${position}th`;
+	return `${position}${({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[position % 10] ?? 'th'}`;
+}
+
+function accountSummary(balance: number, ledger: DashboardLedgerEntry[], now: Date) {
+	const dayAgo = now.getTime() - 24 * 60 * 60 * 1_000;
+	const change = ledger.reduce(
+		(total, entry) =>
+			timestampOrZero(entry.occurredAt) >= dayAgo &&
+			timestampOrZero(entry.occurredAt) <= now.getTime()
+				? total + Number(entry.balanceDelta)
+				: total,
+		0
+	);
+	return { balance: Number(balance) || 0, change, period: 'Last 24 hours' as const };
+}
+
+function portfolioSummary(
+	holdingRecords: DashboardHoldingRecord[],
+	racersById: Map<string, DashboardRacerRecord>
+): DashboardView['portfolio'] {
+	const holdings = holdingRecords.map((holding): DashboardHolding => {
+		const racer = racersById.get(holding.racer);
+		const rawPrice = racer?.financials?.currentSharePrice;
+		const currentPrice = Number.isFinite(rawPrice) ? Number(rawPrice) : null;
+		const marketValue = currentPrice === null ? null : holding.quantity * currentPrice;
+		const gain = marketValue === null ? null : marketValue - holding.costBasis;
+		return {
+			racerId: holding.racer,
+			racerName: racer?.name ?? 'Unknown racer',
+			quantity: holding.quantity,
+			costBasis: holding.costBasis,
+			currentPrice,
+			marketValue,
+			gain,
+			gainPercent: gain === null || holding.costBasis <= 0 ? null : (gain / holding.costBasis) * 100
+		};
+	});
+	const valuedHoldings = holdings.filter(
+		(holding): holding is DashboardHolding & { marketValue: number; gain: number } =>
+			holding.marketValue !== null && holding.gain !== null
+	);
+	const costBasis = holdings.reduce((total, holding) => total + holding.costBasis, 0);
+	const hasEveryMarketPrice = valuedHoldings.length === holdings.length;
+	const marketValue = hasEveryMarketPrice
+		? valuedHoldings.reduce((total, holding) => total + holding.marketValue, 0)
+		: null;
+	const gain = marketValue === null ? null : marketValue - costBasis;
+	return {
+		costBasis,
+		marketValue,
+		gain,
+		gainPercent: gain !== null && costBasis > 0 ? (gain / costBasis) * 100 : null,
+		holdings
+	};
+}
+
+function raceSummaries(
+	races: DashboardRaceRecord[],
+	tracksById: Map<string, string>,
+	racersById: Map<string, DashboardRacerRecord>
+): Pick<DashboardView, 'upcomingRaces' | 'recentResults'> {
+	const raceView = (race: DashboardRaceRecord): DashboardRace => ({
+		id: race.id ?? '',
+		name: race.name,
+		status: race.status,
+		trackName: tracksById.get(race.racetrack ?? '') ?? 'Unknown track',
+		startTime: race.startTime
+	});
+	const upcomingRaces = races
+		.filter((race) => race.status === 'pending' || race.status === 'countdown')
+		.toSorted((left, right) => timestampOrZero(left.startTime) - timestampOrZero(right.startTime))
+		.slice(0, 3)
+		.map(raceView);
+	const recentResults = races
+		.filter((race) => race.status === 'finished' || race.status === 'settled')
+		.toSorted((left, right) => timestampOrZero(right.startTime) - timestampOrZero(left.startTime))
+		.slice(0, 3)
+		.map((race) => ({
+			...raceView(race),
+			winnerName: racersById.get(race.winner ?? '')?.name ?? 'Result pending'
+		}))
+		.map(({ status: _status, ...result }) => result);
+	return { upcomingRaces, recentResults };
+}
+
+function watchedActivitySummary(
+	racers: DashboardRacerRecord[],
+	watchlist: string[],
+	racesById: Map<string, DashboardRaceRecord>
+): DashboardActivity[] {
+	const watched = new Set(watchlist);
+	return racers
+		.filter((racer) => !!racer.id && watched.has(racer.id))
+		.flatMap((racer): DashboardActivity[] => {
+			const racerId = racer.id ?? '';
+			const priceActivity = (racer.financials?.priceHistory ?? []).flatMap((point) =>
+				timestampOrZero(point.timestamp) > 0
+					? [
+							{
+								racerId,
+								racerName: racer.name,
+								description: `Price moved to ${formatMarketPrice(point.price)}${point.reason ? ` · ${point.reason}` : ''}`,
+								timestamp: point.timestamp
+							}
+						]
+					: []
+			);
+			const resultActivity = (racer.raceHistory?.races ?? []).flatMap((result) => {
+				const race = racesById.get(result.raceId);
+				return timestampOrZero(result.date) > 0
+					? [
+							{
+								racerId,
+								racerName: racer.name,
+								description: `Finished ${ordinal(result.position)} in ${race?.name ?? 'a race'}`,
+								timestamp: result.date
+							}
+						]
+					: [];
+			});
+			return [...priceActivity, ...resultActivity];
+		})
+		.toSorted((left, right) => timestampOrZero(right.timestamp) - timestampOrZero(left.timestamp))
+		.slice(0, 5);
+}
+
+export function aggregateDashboard(input: DashboardInput): DashboardView {
+	const racersById = new Map(
+		input.racers.flatMap((racer) => (racer.id ? [[racer.id, racer] as const] : []))
+	);
+	const racesById = new Map(
+		input.races.flatMap((race) => (race.id ? [[race.id, race] as const] : []))
+	);
+	const races = raceSummaries(
+		input.races,
+		new Map(input.racetracks.map((track) => [track.id, track.name])),
+		racersById
+	);
+
+	return {
+		account: accountSummary(input.balance, input.ledger, input.now ?? new Date()),
+		portfolio: portfolioSummary(input.holdings, racersById),
+		...races,
+		watchedActivity: watchedActivitySummary(input.racers, input.watchlist, racesById)
+	};
+}
