@@ -53,6 +53,12 @@ test('race presentation resolves track, participants, winner and finishing resul
 	const completed = race('race-finished', 'settled', '2026-08-15T10:00:00Z');
 	completed.winner = 'racer-3';
 	completed.finishingOrder = ['racer-3', 'racer-1', 'missing-racer'];
+	completed.prizeCurve = [30, 20, 10];
+	completed.awardedPrizes = [
+		{ racerId: 'racer-3', position: 1, amount: 30 },
+		{ racerId: 'racer-1', position: 2, amount: 20 },
+		{ racerId: 'missing-racer', position: 3, amount: 10 }
+	];
 
 	assert.deepEqual(presentRace(completed, racers, [track]), {
 		race: completed,
@@ -60,10 +66,20 @@ test('race presentation resolves track, participants, winner and finishing resul
 		participants: [racers[2], racers[0]],
 		participantCount: 2,
 		winnerName: 'Comet',
+		prizeStructure: [
+			{ position: 1, amount: 30 },
+			{ position: 2, amount: 20 },
+			{ position: 3, amount: 10 }
+		],
 		results: [
-			{ position: 1, racerId: 'racer-3', racerName: 'Comet' },
-			{ position: 2, racerId: 'racer-1', racerName: 'Bolt' },
-			{ position: 3, racerId: 'missing-racer', racerName: 'Unknown racer' }
+			{ position: 1, racerId: 'racer-3', racerName: 'Comet', prizeMoney: 30 },
+			{ position: 2, racerId: 'racer-1', racerName: 'Bolt', prizeMoney: 20 },
+			{
+				position: 3,
+				racerId: 'missing-racer',
+				racerName: 'Unknown racer',
+				prizeMoney: 10
+			}
 		]
 	});
 });

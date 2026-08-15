@@ -5,7 +5,8 @@ import { once } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import PocketBase, { BaseAuthStore } from 'pocketbase';
+import type PocketBase from 'pocketbase';
+import { NodePocketBase } from './support/node-pocketbase';
 
 const projectDirectory = resolve(import.meta.dirname, '..');
 const startingBalance = 10_000;
@@ -17,14 +18,8 @@ let server: ChildProcess;
 let baseUrl = '';
 let serviceClient: PocketBase;
 
-class IntegrationPocketBase extends PocketBase {
-	override buildURL(path = ''): string {
-		return `${this.baseURL}${path.startsWith('/') ? path : `/${path}`}`;
-	}
-}
-
 function pocketBaseClient(): PocketBase {
-	return new IntegrationPocketBase(baseUrl, new BaseAuthStore());
+	return new NodePocketBase(baseUrl);
 }
 
 async function waitForPocketBase(url: string): Promise<void> {

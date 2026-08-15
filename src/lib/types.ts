@@ -2,6 +2,8 @@ import type { Sprite, Texture } from 'pixi.js';
 import type { AuthRecord } from 'pocketbase';
 import type { CameraMode, LeaderboardMode, Theme } from './settingsPreferences';
 
+export type AwardedPrize = { racerId: string; position: number; amount: number };
+
 export type RaceType = {
 	id?: string;
 	name: string;
@@ -10,6 +12,8 @@ export type RaceType = {
 	racetrack: string;
 	winner: string;
 	finishingOrder: string[];
+	prizeCurve?: number[];
+	awardedPrizes?: AwardedPrize[];
 	startTime: Date;
 	endTime: Date;
 	totalLaps: number;
@@ -30,6 +34,8 @@ export class Race implements RaceType {
 	racetrack: string = '175hl67e5pvjjib';
 	winner: string = '';
 	finishingOrder: string[] = [];
+	prizeCurve?: number[] = [];
+	awardedPrizes?: AwardedPrize[] = [];
 	startTime: Date = new Date();
 	totalLaps: number = 99;
 	endTime: Date = new Date();
@@ -419,9 +425,17 @@ export type Wager = {
 
 export type EventType = {
 	id: string;
-	type: 'DailyLeagueRaces';
+	type: 'DailyLeagueRaces' | 'RaceSettled';
 	scheduleKey?: string;
-	startTime: Date;
+	startTime?: Date;
+	idempotencyKey?: string;
+	occurredAt?: Date;
+	facts?: {
+		raceId: string;
+		winnerId: string;
+		finishingOrder: string[];
+		awardedPrizes: AwardedPrize[];
+	};
 	raceIds: string[];
 	started: boolean;
 	finished: boolean;

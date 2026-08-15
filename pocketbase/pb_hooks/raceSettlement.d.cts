@@ -7,7 +7,6 @@ type RaceHistory = {
 
 type SettlementParticipant = {
 	id: string;
-	leagueId: string;
 	finished: boolean;
 	finishedAt: string;
 	stats: Record<string, unknown> & { ranking: number };
@@ -16,6 +15,8 @@ type SettlementParticipant = {
 	totalShares: number;
 };
 
+type AwardedPrize = { racerId: string; position: number; amount: number };
+
 type SettlementPlan = {
 	race: {
 		id: string;
@@ -23,6 +24,7 @@ type SettlementPlan = {
 		winner: string;
 		endTime: string;
 		finishingOrder: string[];
+		awardedPrizes: AwardedPrize[];
 	};
 	racers: Array<{
 		id: string;
@@ -41,7 +43,7 @@ declare const settlementRules: {
 	buildRaceSettlement(input: {
 		raceId: string;
 		participants: SettlementParticipant[];
-		rewardScaleByLeague: Record<string, number>;
+		prizeCurve: number[];
 	}): SettlementPlan;
 };
 

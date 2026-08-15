@@ -38,6 +38,14 @@ routerAdd(
 				winnerSelections: market.selections
 			});
 		};
+		const snapshotPrizeCurve = (race, entrantCount, scale) => {
+			const places = Math.max(0, entrantCount);
+			const safeScale = Math.max(0, scale);
+			race.set(
+				'prizeCurve',
+				Array.from({ length: places }, (_, index) => (places - index) * safeScale)
+			);
+		};
 
 		const body = e.requestInfo().body || {};
 		const nowMs = body.now === undefined ? Date.now() : Date.parse(body.now);
@@ -150,6 +158,15 @@ routerAdd(
 									txApp.save(racer);
 									scheduledRacers.push(racer);
 									result.assignedRacers += 1;
+								}
+								if (backfill.length > 0) {
+									const storedCurve = JSON.parse(toString(race.get('prizeCurve')));
+									const snapshottedScale =
+										storedCurve.length > 0
+											? storedCurve[storedCurve.length - 1]
+											: league.getFloat('prizeMoneyScaling');
+									snapshotPrizeCurve(race, scheduledRacers.length, snapshottedScale);
+									txApp.save(race);
 								}
 							}
 							if (scheduledRacers.length >= 2) {
@@ -264,6 +281,7 @@ routerAdd(
 						race.set('racetrack', racetracks[0].id);
 						race.set('startTime', new Date(slotMs).toISOString());
 						race.set('totalLaps', totalLaps);
+						snapshotPrizeCurve(race, selected.length, league.getFloat('prizeMoneyScaling'));
 						exposeWinnerMarket(race, selected, new Date(slotMs).toISOString());
 						txApp.save(race);
 						raceIds.push(race.id);

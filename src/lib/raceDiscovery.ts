@@ -10,6 +10,7 @@ type RaceResult = {
 	position: number;
 	racerId: string;
 	racerName: string;
+	prizeMoney?: number;
 };
 
 export type RacePresentation = {
@@ -18,6 +19,7 @@ export type RacePresentation = {
 	participants: Racer[];
 	participantCount: number;
 	winnerName: string | undefined;
+	prizeStructure: { position: number; amount: number }[];
 	results: RaceResult[];
 };
 
@@ -55,16 +57,24 @@ export function presentRace(
 		const racer = racerById.get(id);
 		return racer ? [racer] : [];
 	});
+	const prizeByRacer = new Map(
+		(race.awardedPrizes ?? []).map((prize) => [prize.racerId, prize.amount])
+	);
 	return {
 		race,
 		trackName: tracks.find((track) => track.id === race.racetrack)?.name ?? 'Unknown track',
 		participants,
 		participantCount: participants.length,
 		winnerName: race.winner ? (racerById.get(race.winner)?.name ?? 'Unknown racer') : undefined,
+		prizeStructure: (race.prizeCurve ?? []).map((amount, index) => ({
+			position: index + 1,
+			amount
+		})),
 		results: race.finishingOrder.map((racerId, index) => ({
 			position: index + 1,
 			racerId,
-			racerName: racerById.get(racerId)?.name ?? 'Unknown racer'
+			racerName: racerById.get(racerId)?.name ?? 'Unknown racer',
+			prizeMoney: prizeByRacer.get(racerId)
 		}))
 	};
 }

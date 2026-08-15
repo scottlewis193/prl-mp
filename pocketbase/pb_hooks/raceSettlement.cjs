@@ -5,9 +5,16 @@ function orderRaceFinishers(participants) {
 	});
 }
 
-function buildRaceSettlement({ raceId, participants, rewardScaleByLeague }) {
+function buildRaceSettlement({ raceId, participants, prizeCurve }) {
 	if (!raceId) throw new Error('Cannot settle a race without an ID');
 	if (participants.length === 0) throw new Error(`Cannot settle race ${raceId} without racers`);
+	if (
+		!Array.isArray(prizeCurve) ||
+		prizeCurve.length < participants.length ||
+		prizeCurve.some((amount) => !Number.isFinite(amount) || amount < 0)
+	) {
+		throw new Error(`Race ${raceId} does not have a valid prize curve for every finisher`);
+	}
 	for (const racer of participants) {
 		if (!racer.id || !racer.finished || !Number.isFinite(Date.parse(racer.finishedAt))) {
 			throw new Error(`Race ${raceId} has a racer without a durable finish`);
@@ -25,8 +32,7 @@ function buildRaceSettlement({ raceId, participants, rewardScaleByLeague }) {
 		}
 
 		const position = index + 1;
-		const rewardScale = Math.max(0, rewardScaleByLeague[racer.leagueId] ?? 0);
-		const prizeMoney = (finishers.length - index) * rewardScale;
+		const prizeMoney = prizeCurve[index];
 		const totalRaces = racer.raceHistory.totalRaces + 1;
 		const averageFinishPosition =
 			(racer.raceHistory.averageFinishPosition * racer.raceHistory.totalRaces + position) /
@@ -58,7 +64,12 @@ function buildRaceSettlement({ raceId, participants, rewardScaleByLeague }) {
 			status: 'settled',
 			winner: finishers[0].id,
 			endTime: completedAt,
-			finishingOrder: finishers.map((racer) => racer.id)
+			finishingOrder: finishers.map((racer) => racer.id),
+			awardedPrizes: finishers.map((racer, index) => ({
+				racerId: racer.id,
+				position: index + 1,
+				amount: prizeCurve[index]
+			}))
 		},
 		racers
 	};
