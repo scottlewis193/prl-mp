@@ -13,6 +13,13 @@ export type RaceType = {
 	startTime: Date;
 	endTime: Date;
 	totalLaps: number;
+	bettingCutoff?: Date;
+	markets?: {
+		winnerType?: 'winner';
+		winnerName?: string;
+		winnerCutoff?: string;
+		winnerSelections?: { racerId: string; odds: number }[];
+	};
 };
 
 export class Race implements RaceType {
@@ -26,6 +33,8 @@ export class Race implements RaceType {
 	startTime: Date = new Date();
 	totalLaps: number = 99;
 	endTime: Date = new Date();
+	bettingCutoff?: Date;
+	markets?: RaceType['markets'];
 }
 
 type RacerType = {
@@ -391,6 +400,21 @@ export type Holding = {
 	racer: string;
 	quantity: number;
 	costBasis: number;
+};
+
+export type Wager = {
+	id?: string;
+	player: string;
+	race: string;
+	market: 'winner';
+	selection: string;
+	stake: number;
+	odds: number;
+	potentialPayout: number;
+	status: 'open' | 'won' | 'lost' | 'refunded';
+	payout: number;
+	placedAt: string;
+	resolvedAt?: string;
 };
 
 export type EventType = {

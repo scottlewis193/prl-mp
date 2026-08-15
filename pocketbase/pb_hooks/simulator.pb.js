@@ -100,6 +100,20 @@ routerAdd(
 					throw e.badRequestError('A race update requires an id.', {});
 				}
 				const race = txApp.findRecordById('races', raceUpdate.id);
+				if (raceUpdate.status === 'settled') {
+					throw e.badRequestError('Settled races must use the settlement endpoint.', {});
+				}
+				if (raceUpdate.status === 'cancelled') {
+					require(`${__hooks}/wagerSettlement.cjs`).resolveRaceWagers(txApp, {
+						raceId: race.id,
+						outcome: 'void',
+						resolvedAt:
+							typeof raceUpdate.endTime === 'string' &&
+							Number.isFinite(Date.parse(raceUpdate.endTime))
+								? raceUpdate.endTime
+								: new Date().toISOString()
+					});
+				}
 				if (typeof raceUpdate.status === 'string') race.set('status', raceUpdate.status);
 				if (typeof raceUpdate.winner === 'string') race.set('winner', raceUpdate.winner);
 				if (typeof raceUpdate.endTime === 'string') race.set('endTime', raceUpdate.endTime);
@@ -243,6 +257,12 @@ routerAdd(
 				racer.set('financials', update.financials);
 				txApp.save(racer);
 			}
+			require(`${__hooks}/wagerSettlement.cjs`).resolveRaceWagers(txApp, {
+				raceId,
+				outcome: 'settled',
+				winnerId: plan.race.winner,
+				resolvedAt: plan.race.endTime
+			});
 
 			race.set('winner', plan.race.winner);
 			race.set('finishingOrder', plan.race.finishingOrder);

@@ -125,6 +125,123 @@ test('migration backfills existing accounts and registration provisions a balanc
 	);
 });
 
+test('placing a wager atomically reserves funds and replays the immutable result', async () => {
+	const player = await registerPlayer('wager-player@example.com');
+	const raceId = 'prlseedrace0001';
+	const cutoff = new Date(Date.now() + 60_000).toISOString();
+	await serviceClient.collection('races').update(raceId, {
+		status: 'pending',
+		startTime: cutoff,
+		bettingCutoff: cutoff,
+		markets: {
+			winnerType: 'winner',
+			winnerName: 'Race winner',
+			winnerCutoff: cutoff,
+			winnerSelections: [{ racerId: 'prlseedracer001', odds: 2.5 }]
+		}
+	});
+	const order = {
+		raceId,
+		market: 'winner',
+		selection: 'prlseedracer001',
+		stake: 20,
+		idempotencyKey: 'winner-20'
+	};
+
+	const placed = await player.send('/api/prl/wagers/place', { method: 'POST', body: order });
+	const replayed = await player.send('/api/prl/wagers/place', { method: 'POST', body: order });
+
+	assert.deepEqual(replayed, placed);
+	assert.deepEqual(placed, {
+		id: (placed as { id: string }).id,
+		status: 'open',
+		balance: 9_980,
+		stake: 20,
+		odds: 2.5,
+		potentialPayout: 50
+	});
+	const wagers = await player.collection('wagers').getFullList();
+	assert.equal(wagers.length, 1);
+	assert.deepEqual(
+		wagers.map((wager) => ({
+			race: wager.race,
+			market: wager.market,
+			selection: wager.selection,
+			stake: wager.stake,
+			odds: wager.odds,
+			potentialPayout: wager.potentialPayout,
+			status: wager.status
+		})),
+		[
+			{
+				race: raceId,
+				market: 'winner',
+				selection: 'prlseedracer001',
+				stake: 20,
+				odds: 2.5,
+				potentialPayout: 50,
+				status: 'open'
+			}
+		]
+	);
+	const entries = await player.collection('accountLedger').getFullList({ sort: 'occurredAt,id' });
+	assert.deepEqual(
+		entries.map((entry) => ({ type: entry.type, balanceDelta: entry.balanceDelta })),
+		[
+			{ type: 'account_opened', balanceDelta: 10_000 },
+			{ type: 'wager_reserve', balanceDelta: -20 }
+		]
+	);
+});
+
+test('the race cutoff closes placement and a recorded wager cannot be changed', async () => {
+	const player = await registerPlayer('cutoff-player@example.com');
+	const raceId = 'prlseedrace0001';
+	const marketCutoff = new Date(Date.now() + 60_000).toISOString();
+	await serviceClient.collection('races').update(raceId, {
+		status: 'pending',
+		bettingCutoff: new Date(Date.now() - 1).toISOString(),
+		markets: {
+			winnerType: 'winner',
+			winnerName: 'Race winner',
+			winnerCutoff: marketCutoff,
+			winnerSelections: [{ racerId: 'prlseedracer001', odds: 2 }]
+		}
+	});
+
+	await assert.rejects(
+		() =>
+			player.send('/api/prl/wagers/place', {
+				method: 'POST',
+				body: {
+					raceId,
+					market: 'winner',
+					selection: 'prlseedracer001',
+					stake: 10,
+					idempotencyKey: 'after-cutoff'
+				}
+			}),
+		/closed/i
+	);
+	assert.equal((await player.collection('users').authRefresh()).record.balance, 10_000);
+
+	await serviceClient.collection('races').update(raceId, { bettingCutoff: marketCutoff });
+	const placed = (await player.send('/api/prl/wagers/place', {
+		method: 'POST',
+		body: {
+			raceId,
+			market: 'winner',
+			selection: 'prlseedracer001',
+			stake: 10,
+			idempotencyKey: 'immutable-wager'
+		}
+	})) as { id: string };
+	await assert.rejects(
+		() => player.collection('wagers').update(placed.id, { stake: 1 }),
+		/authorized|permission|missing|superusers/i
+	);
+});
+
 test('buying derives the total from the racer price and atomically records balance, holding, and ledger', async () => {
 	const player = await registerPlayer('buyer@example.com');
 	const result = (await player.send('/api/prl/economy/trade', {

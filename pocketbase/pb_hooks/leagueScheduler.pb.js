@@ -21,6 +21,23 @@ routerAdd(
 			record.unmarshalJSONField('stats', stats);
 			return Number(stats.ranking) || 0;
 		};
+		const exposeWinnerMarket = (race, racers, cutoff) => {
+			race.set('bettingCutoff', cutoff);
+			if (racers.length < 2) {
+				race.set('markets', {});
+				return;
+			}
+			const market = require(`${__hooks}/wager.cjs`).buildWinnerMarket(
+				racers.map((racer) => ({ racerId: racer.id, ranking: schedulerRanking(racer) })),
+				cutoff
+			);
+			race.set('markets', {
+				winnerType: market.type,
+				winnerName: market.name,
+				winnerCutoff: market.cutoff,
+				winnerSelections: market.selections
+			});
+		};
 
 		const body = e.requestInfo().body || {};
 		const nowMs = body.now === undefined ? Date.now() : Date.parse(body.now);
@@ -135,6 +152,10 @@ routerAdd(
 									result.assignedRacers += 1;
 								}
 							}
+							if (scheduledRacers.length >= 2) {
+								exposeWinnerMarket(race, scheduledRacers, new Date(eventStartMs).toISOString());
+								txApp.save(race);
+							}
 						}
 						if (
 							Number.isFinite(eventStartMs) &&
@@ -180,6 +201,13 @@ routerAdd(
 						}
 
 						if (nextStatus !== currentStatus) {
+							if (nextStatus === 'cancelled') {
+								require(`${__hooks}/wagerSettlement.cjs`).resolveRaceWagers(txApp, {
+									raceId: race.id,
+									outcome: 'void',
+									resolvedAt: new Date(nowMs).toISOString()
+								});
+							}
 							race.set('status', nextStatus);
 							txApp.save(race);
 							result.transitionedRaces += 1;
@@ -236,6 +264,7 @@ routerAdd(
 						race.set('racetrack', racetracks[0].id);
 						race.set('startTime', new Date(slotMs).toISOString());
 						race.set('totalLaps', totalLaps);
+						exposeWinnerMarket(race, selected, new Date(slotMs).toISOString());
 						txApp.save(race);
 						raceIds.push(race.id);
 						result.createdRaces += 1;

@@ -28,7 +28,8 @@ const expectedCollections = [
 	'simulator_leases',
 	'subscriptions',
 	'trainers',
-	'users'
+	'users',
+	'wagers'
 ];
 
 const pb = new PocketBase(baseUrl);

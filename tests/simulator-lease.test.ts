@@ -42,11 +42,12 @@ async function commit(
 	client: PocketBase,
 	ownerId: string,
 	token: number,
-	racerUpdates: unknown[] = []
+	racerUpdates: unknown[] = [],
+	raceUpdate?: unknown
 ) {
 	return client.send('/api/prl/simulator/commit', {
 		method: 'POST',
-		body: { ownerId, token, racerUpdates }
+		body: { ownerId, token, racerUpdates, raceUpdate }
 	}) as Promise<{ committed: boolean }>;
 }
 
@@ -91,7 +92,10 @@ async function resetScheduleFixture(client: PocketBase): Promise<void> {
 	await Promise.all(
 		racers.map((racer) => client.collection('racers').update(racer.id, { race: null }))
 	);
-	await client.collection('races').update('prlseedrace0001', { status: 'settled' });
+	await client.collection('races').update('prlseedrace0001', {
+		status: 'settled',
+		league: null
+	});
 }
 
 async function makeEveryRacerEligible(client: PocketBase): Promise<void> {
@@ -205,6 +209,41 @@ test('settles a finished race atomically and remains unchanged when settlement i
 		filter: `race = "${raceId}"`,
 		sort: 'id'
 	});
+	const balanceBeforeWagers = firstWorker.authStore.record?.balance as number;
+	const bettingCutoff = new Date(Date.now() + 60_000).toISOString();
+	await firstWorker.collection('races').update(raceId, {
+		status: 'pending',
+		bettingCutoff,
+		markets: {
+			winnerType: 'winner',
+			winnerName: 'Race winner',
+			winnerCutoff: bettingCutoff,
+			winnerSelections: [
+				{ racerId: racers[0].id, odds: 3 },
+				{ racerId: racers.at(-1)?.id, odds: 2.5 }
+			]
+		}
+	});
+	await firstWorker.send('/api/prl/wagers/place', {
+		method: 'POST',
+		body: {
+			raceId,
+			market: 'winner',
+			selection: racers.at(-1)?.id,
+			stake: 20,
+			idempotencyKey: 'settlement-winner'
+		}
+	});
+	await firstWorker.send('/api/prl/wagers/place', {
+		method: 'POST',
+		body: {
+			raceId,
+			market: 'winner',
+			selection: racers[0].id,
+			stake: 10,
+			idempotencyKey: 'settlement-loser'
+		}
+	});
 	await Promise.all(
 		racers.map((racer, index) => {
 			const crossingTime = new Date(Date.parse(finishedAt) - (index + 1) * 1000).toISOString();
@@ -252,6 +291,20 @@ test('settles a finished race atomically and remains unchanged when settlement i
 		settledRacers.every((racer) => racer.race === ''),
 		true
 	);
+	const settledWagers = await firstWorker.collection('wagers').getFullList({ sort: 'selection' });
+	assert.deepEqual(
+		settledWagers.map((wager) => ({
+			selection: wager.selection,
+			status: wager.status,
+			payout: wager.payout
+		})),
+		[
+			{ selection: racers[0].id, status: 'lost', payout: 0 },
+			{ selection: racers.at(-1)?.id, status: 'won', payout: 50 }
+		]
+	);
+	const refreshedAfterPayout = await firstWorker.collection('users').authRefresh();
+	assert.equal(refreshedAfterPayout.record.balance, balanceBeforeWagers + 20);
 	assert.deepEqual(
 		settledRacers.map((racer) => ({
 			position: racer.raceHistory.races.at(-1)?.position,
@@ -271,12 +324,114 @@ test('settles a finished race atomically and remains unchanged when settlement i
 		}))
 	);
 
-	const beforeRetry = JSON.stringify(settledRacers);
+	const beforeRetry = JSON.stringify({
+		racers: settledRacers,
+		wagers: settledWagers,
+		balance: refreshedAfterPayout.record.balance
+	});
 	assert.deepEqual(await settle(secondWorker, raceId), { settled: false });
 	assert.equal(
-		JSON.stringify(await secondWorker.collection('racers').getFullList({ sort: 'id' })),
+		JSON.stringify({
+			racers: await secondWorker.collection('racers').getFullList({ sort: 'id' }),
+			wagers: await secondWorker.collection('wagers').getFullList({ sort: 'selection' }),
+			balance: (await secondWorker.collection('users').authRefresh()).record.balance
+		}),
 		beforeRetry
 	);
+});
+
+test('a cancelled race refunds each reserved stake exactly once', async () => {
+	await resetScheduleFixture(firstWorker);
+	await makeEveryRacerEligible(firstWorker);
+	await firstWorker.collection('leagues').update('prlseeddemo0001', { maxPlayers: 4 });
+	const now = new Date();
+	const startsAt = new Date(now.getTime() + 60_000).toISOString();
+	await firstWorker.collection('races').update('prlseedrace0001', {
+		status: 'pending',
+		league: 'prlseeddemo0001',
+		startTime: startsAt
+	});
+	await firstWorker.collection('events').create({
+		type: 'DailyLeagueRaces',
+		scheduleKey: `void-test:${now.getTime()}`,
+		startTime: startsAt,
+		raceIds: ['prlseedrace0001'],
+		started: false,
+		finished: false
+	});
+	await reconcileSchedule(firstWorker, now.toISOString(), { futureEventCount: 1 });
+	const race = await firstWorker.collection('races').getOne('prlseedrace0001');
+	const assigned = await firstWorker.collection('racers').getFullList({
+		filter: `race = "${race.id}"`,
+		sort: 'id'
+	});
+	const balanceBefore = (await firstWorker.collection('users').authRefresh()).record.balance;
+	const placed = (await firstWorker.send('/api/prl/wagers/place', {
+		method: 'POST',
+		body: {
+			raceId: race.id,
+			market: 'winner',
+			selection: assigned[0].id,
+			stake: 25,
+			idempotencyKey: 'void-refund'
+		}
+	})) as { id: string };
+	const allRacers = await firstWorker.collection('racers').getFullList();
+	await Promise.all(
+		allRacers.map((racer) =>
+			firstWorker.collection('racers').update(racer.id, {
+				race: null,
+				status: { ...racer.status, injured: true }
+			})
+		)
+	);
+
+	const lease = await claim(secondWorker, 'replacement-worker', 5_000);
+	assert.equal(lease.acquired, true);
+	assert.equal(
+		(
+			await commit(secondWorker, 'replacement-worker', lease.token as number, [], {
+				id: race.id,
+				status: 'cancelled',
+				endTime: race.startTime
+			})
+		).committed,
+		true
+	);
+	const refunded = await firstWorker.collection('wagers').getOne(placed.id);
+	assert.deepEqual(
+		{ status: refunded.status, payout: refunded.payout },
+		{ status: 'refunded', payout: 25 }
+	);
+	assert.equal((await firstWorker.collection('users').authRefresh()).record.balance, balanceBefore);
+	const refundEntriesBeforeRetry = await firstWorker.collection('accountLedger').getFullList({
+		filter: `wager = "${refunded.id}" && type = "wager_refund"`
+	});
+	assert.equal(refundEntriesBeforeRetry.length, 1);
+
+	assert.equal(
+		(
+			await commit(secondWorker, 'replacement-worker', lease.token as number, [], {
+				id: race.id,
+				status: 'cancelled',
+				endTime: race.startTime
+			})
+		).committed,
+		true
+	);
+	assert.equal(
+		(
+			await secondWorker.collection('accountLedger').getFullList({
+				filter: `wager = "${refunded.id}" && type = "wager_refund"`
+			})
+		).length,
+		1
+	);
+	assert.equal(
+		(await secondWorker.collection('users').authRefresh()).record.balance,
+		balanceBefore
+	);
+	await makeEveryRacerEligible(firstWorker);
 });
 
 test('maintains the configured event pipeline without duplicate or overlapping assignments', async () => {
@@ -317,6 +472,22 @@ test('maintains the configured event pipeline without duplicate or overlapping a
 		['2026-08-14T13:00:00.000Z', '2026-08-14T14:00:00.000Z']
 	);
 	assert.equal(races.length, 2);
+	assert.equal(
+		races.every(
+			(race) =>
+				new Date(race.bettingCutoff).toISOString() === new Date(race.startTime).toISOString() &&
+				race.markets?.winnerType === 'winner' &&
+				race.markets?.winnerName === 'Race winner' &&
+				new Date(race.markets?.winnerCutoff).toISOString() ===
+					new Date(race.startTime).toISOString() &&
+				race.markets?.winnerSelections?.length >= 2 &&
+				race.markets.winnerSelections.every(
+					(selection: { racerId: string; odds: number }) =>
+						selection.racerId && selection.odds >= 1.01
+				)
+		),
+		true
+	);
 	assert.equal(
 		races.every((race) => race.league === 'prlseeddemo0001'),
 		true
