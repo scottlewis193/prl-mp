@@ -5,7 +5,7 @@ import { copyFile, mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import test from 'node:test';
-import PocketBase from 'pocketbase';
+import PocketBase, { BaseAuthStore } from 'pocketbase';
 
 const projectDirectory = resolve(import.meta.dirname, '..');
 const migrationName = '1786740700_add_atomic_race_settlement.js';
@@ -78,7 +78,7 @@ test('migration reconstructs settled awards and freezes only unsettled legacy pr
 	let server: ChildProcess | undefined;
 	try {
 		server = await startPocketBase(baseUrl, port, dataDirectory, legacyMigrations);
-		let client = new PocketBase(baseUrl);
+		let client = new PocketBase(baseUrl, new BaseAuthStore());
 		client.autoCancellation(false);
 		await client.collection('users').authWithPassword(serviceEmail, servicePassword);
 		const racers = await client.collection('racers').getFullList({ sort: 'id' });
@@ -135,7 +135,7 @@ test('migration reconstructs settled awards and freezes only unsettled legacy pr
 
 		await stopPocketBase(server);
 		server = await startPocketBase(baseUrl, port, dataDirectory, migrationsDirectory);
-		client = new PocketBase(baseUrl);
+		client = new PocketBase(baseUrl, new BaseAuthStore());
 		client.autoCancellation(false);
 		await client.collection('users').authWithPassword(serviceEmail, servicePassword);
 
