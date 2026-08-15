@@ -16,6 +16,7 @@ declare const wagerRules: {
 		stake: number;
 		odds: number;
 		potentialPayout: number;
+		cutoffAt: string;
 	};
 	roundMoney(amount: number): number;
 };

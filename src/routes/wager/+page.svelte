@@ -1,4 +1,6 @@
 <script lang="ts">
+	import type { WagerAccount } from '$lib/wagerAccount';
+
 	type NamedRecord = { id: string; name: string; race?: string };
 	type MarketBook = {
 		winnerType?: string;
@@ -6,26 +8,14 @@
 		winnerCutoff?: string;
 		winnerSelections?: { racerId: string; odds: number }[];
 	};
-	type WagerRecord = {
-		id: string;
-		stake: number;
-		odds: number;
-		potentialPayout: number;
-		payout: number;
-		status: string;
-		expand?: { race?: { name?: string }; selection?: { name?: string } };
-	};
 	let {
 		data,
 		form
 	}: {
-		data: {
-			balance: number;
+		data: WagerAccount & {
 			requestId: string;
 			races: Array<NamedRecord & { bettingCutoff: string; markets: MarketBook }>;
 			racers: NamedRecord[];
-			openWagers: WagerRecord[];
-			historicalWagers: WagerRecord[];
 		};
 		form?: { success?: boolean; error?: string };
 	} = $props();
@@ -47,7 +37,14 @@
 			<h1 class="text-2xl font-bold">Race wagering</h1>
 			<p class="text-sm opacity-70">Fixed odds are locked when your wager is accepted.</p>
 		</div>
-		<p class="font-semibold">Available {formatMoney(data.balance)}</p>
+		<div class="text-right">
+			<p class="font-semibold">Available {formatMoney(data.balance)}</p>
+			<p class="text-xs opacity-70">
+				Ledger {formatMoney(data.ledgerBalance)} · {!data.reconciled
+					? 'Needs reconciliation'
+					: 'Reconciled'}
+			</p>
+		</div>
 	</header>
 
 	{#if form?.error}<p class="alert alert-error" role="alert">{form.error}</p>{/if}
@@ -70,7 +67,11 @@
 									<form method="POST" action="?/place" class="rounded-box bg-base-100 p-3">
 										<input type="hidden" name="raceId" value={race.id} />
 										<input type="hidden" name="selection" value={selection.racerId} />
-										<input type="hidden" name="requestId" value={data.requestId} />
+										<input
+											type="hidden"
+											name="requestId"
+											value={`${data.requestId}:${race.id}:${selection.racerId}`}
+										/>
 										<div class="mb-2 flex justify-between">
 											<strong>{racerName(selection.racerId)}</strong>
 											<span>{selection.odds.toFixed(2)}</span>
@@ -97,8 +98,8 @@
 		<div class="grid gap-3 md:grid-cols-2">
 			{#each data.openWagers as wager}
 				<article class="card bg-base-200 p-4">
-					<strong>{wager.expand?.race?.name ?? 'Race'}</strong>
-					<span>{wager.expand?.selection?.name ?? 'Selection'} at {wager.odds.toFixed(2)}</span>
+					<strong>{wager.raceName}</strong>
+					<span>{wager.selectionName} at {wager.odds.toFixed(2)}</span>
 					<span>Stake {formatMoney(wager.stake)}</span>
 					<span>Potential payout {formatMoney(wager.potentialPayout)}</span>
 				</article>
@@ -119,8 +120,8 @@
 				<tbody>
 					{#each data.historicalWagers as wager}
 						<tr>
-							<td>{wager.expand?.race?.name ?? 'Race'}</td>
-							<td>{wager.expand?.selection?.name ?? 'Selection'}</td>
+							<td>{wager.raceName}</td>
+							<td>{wager.selectionName}</td>
 							<td>{statusLabel(wager.status)}</td>
 							<td>{formatMoney(wager.stake)}</td>
 							<td>Payout {formatMoney(wager.payout)}</td>

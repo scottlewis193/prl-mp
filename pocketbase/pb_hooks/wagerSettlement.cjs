@@ -1,13 +1,35 @@
 const { roundMoney } = require('./wager.cjs');
 
+const WAGER_LEDGER_EVENTS = Object.freeze({
+	reserve: Object.freeze({
+		type: 'wager_reserve',
+		reason: 'stake_reserved',
+		sourceSuffix: 'reserve'
+	}),
+	payout: Object.freeze({
+		type: 'wager_payout',
+		reason: 'winning_wager_paid',
+		sourceSuffix: 'payout'
+	}),
+	refund: Object.freeze({
+		type: 'wager_refund',
+		reason: 'voided_market_refund',
+		sourceSuffix: 'refund'
+	})
+});
+
 function recordWagerLedgerEntry(
 	txApp,
-	{ playerId, wagerId, type, balanceDelta, balanceAfter, odds, occurredAt }
+	{ playerId, wagerId, eventKind, balanceDelta, balanceAfter, odds, occurredAt }
 ) {
+	const event = WAGER_LEDGER_EVENTS[eventKind];
+	if (!event) throw new Error('A supported wager ledger event kind is required.');
 	const entry = new Record(txApp.findCollectionByNameOrId('accountLedger'));
 	entry.set('player', playerId);
 	entry.set('wager', wagerId);
-	entry.set('type', type);
+	entry.set('type', event.type);
+	entry.set('reason', event.reason);
+	entry.set('sourceKey', `wager:${wagerId}:${event.sourceSuffix}`);
 	entry.set('balanceDelta', balanceDelta);
 	entry.set('balanceAfter', balanceAfter);
 	entry.set('quantityDelta', 0);
@@ -56,7 +78,7 @@ function resolveRaceWagers(txApp, { raceId, outcome, winnerId = '', resolvedAt }
 			recordWagerLedgerEntry(txApp, {
 				playerId: player.id,
 				wagerId: wager.id,
-				type: isRefund ? 'wager_refund' : 'wager_payout',
+				eventKind: isRefund ? 'refund' : 'payout',
 				balanceDelta: payout,
 				balanceAfter: nextBalance,
 				odds: wager.getFloat('odds'),
@@ -68,4 +90,20 @@ function resolveRaceWagers(txApp, { raceId, outcome, winnerId = '', resolvedAt }
 	return resolvedCount;
 }
 
-module.exports = { recordWagerLedgerEntry, resolveRaceWagers };
+function voidRace(
+	txApp,
+	{ raceId, resolvedAt, invalidStateError = (message) => new Error(message) }
+) {
+	const race = txApp.findRecordById('races', raceId);
+	const status = race.getString('status');
+	if (status === 'cancelled') return { voided: false, refundedWagers: 0 };
+	if (status === 'settled') throw invalidStateError('Settled races cannot be voided.');
+
+	const refundedWagers = resolveRaceWagers(txApp, { raceId, outcome: 'void', resolvedAt });
+	race.set('status', 'cancelled');
+	race.set('endTime', resolvedAt);
+	txApp.save(race);
+	return { voided: true, refundedWagers };
+}
+
+module.exports = { WAGER_LEDGER_EVENTS, recordWagerLedgerEntry, resolveRaceWagers, voidRace };

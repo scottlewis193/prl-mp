@@ -104,29 +104,59 @@ routerAdd(
 					throw e.badRequestError('Settled races must use the settlement endpoint.', {});
 				}
 				if (raceUpdate.status === 'cancelled') {
-					require(`${__hooks}/wagerSettlement.cjs`).resolveRaceWagers(txApp, {
+					require(`${__hooks}/wagerSettlement.cjs`).voidRace(txApp, {
 						raceId: race.id,
-						outcome: 'void',
 						resolvedAt:
 							typeof raceUpdate.endTime === 'string' &&
 							Number.isFinite(Date.parse(raceUpdate.endTime))
 								? raceUpdate.endTime
-								: new Date().toISOString()
+								: new Date().toISOString(),
+						invalidStateError: (message) => e.badRequestError(message, {})
 					});
+				} else {
+					if (['settled', 'cancelled'].includes(race.getString('status'))) {
+						throw e.badRequestError('Terminal races cannot be mutated.', {});
+					}
+					if (typeof raceUpdate.status === 'string') race.set('status', raceUpdate.status);
+					if (typeof raceUpdate.winner === 'string') race.set('winner', raceUpdate.winner);
+					if (typeof raceUpdate.endTime === 'string') race.set('endTime', raceUpdate.endTime);
+					if (Array.isArray(raceUpdate.finishingOrder)) {
+						race.set('finishingOrder', raceUpdate.finishingOrder);
+					}
+					txApp.save(race);
 				}
-				if (typeof raceUpdate.status === 'string') race.set('status', raceUpdate.status);
-				if (typeof raceUpdate.winner === 'string') race.set('winner', raceUpdate.winner);
-				if (typeof raceUpdate.endTime === 'string') race.set('endTime', raceUpdate.endTime);
-				if (Array.isArray(raceUpdate.finishingOrder)) {
-					race.set('finishingOrder', raceUpdate.finishingOrder);
-				}
-				txApp.save(race);
 			}
 
 			committed = true;
 		});
 
 		return e.json(200, { committed });
+	},
+	$apis.requireAuth('users')
+);
+
+routerAdd(
+	'POST',
+	'/api/prl/races/void',
+	(e) => {
+		if (!e.auth || e.auth.id !== 'prlserviceuser0') {
+			throw e.forbiddenError('Only the simulator service account may void races.', {});
+		}
+
+		const body = e.requestInfo().body || {};
+		const raceId = typeof body.raceId === 'string' ? body.raceId.trim() : '';
+		if (!raceId) throw e.badRequestError('A raceId is required.', {});
+
+		let result = { voided: false, refundedWagers: 0 };
+		e.app.runInTransaction((txApp) => {
+			result = require(`${__hooks}/wagerSettlement.cjs`).voidRace(txApp, {
+				raceId,
+				resolvedAt: new Date().toISOString(),
+				invalidStateError: (message) => e.badRequestError(message, {})
+			});
+		});
+
+		return e.json(200, result);
 	},
 	$apis.requireAuth('users')
 );

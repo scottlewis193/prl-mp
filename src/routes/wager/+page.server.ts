@@ -1,4 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
+import type { WagerAccount } from '$lib/wagerAccount';
 
 function placementMessage(error: unknown): string {
 	if (!error || typeof error !== 'object' || !('status' in error) || error.status !== 400) {
@@ -16,7 +17,7 @@ function placementMessage(error: unknown): string {
 export const load = async ({ locals }) => {
 	if (!locals.user) return redirect(303, '/login');
 	const now = new Date().toISOString();
-	const [races, racers, wagers] = await Promise.all([
+	const [races, racers, account] = await Promise.all([
 		locals.pb.collection('races').getFullList({
 			filter: locals.pb.filter(
 				'(status = "pending" || status = "countdown") && bettingCutoff > {:now}',
@@ -29,10 +30,7 @@ export const load = async ({ locals }) => {
 			filter: 'race != ""',
 			fields: 'id,name,race'
 		}),
-		locals.pb.collection('wagers').getFullList({
-			sort: '-placedAt',
-			expand: 'race,selection'
-		})
+		locals.pb.send<WagerAccount>('/api/prl/wagers/account', {})
 	]);
 
 	const eligibleRaces = races.filter(
@@ -43,12 +41,14 @@ export const load = async ({ locals }) => {
 	);
 
 	return {
-		balance: Number(locals.user.balance ?? 0),
+		balance: account.balance,
+		ledgerBalance: account.ledgerBalance,
+		reconciled: account.reconciled,
 		requestId: crypto.randomUUID(),
 		races: eligibleRaces,
 		racers,
-		openWagers: wagers.filter((wager) => wager.status === 'open'),
-		historicalWagers: wagers.filter((wager) => wager.status !== 'open')
+		openWagers: account.openWagers,
+		historicalWagers: account.historicalWagers
 	};
 };
 

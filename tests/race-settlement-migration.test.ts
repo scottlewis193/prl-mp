@@ -1,83 +1,32 @@
 import assert from 'node:assert/strict';
-import { spawn, type ChildProcess } from 'node:child_process';
-import { once } from 'node:events';
-import { copyFile, mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import type { ChildProcess } from 'node:child_process';
+import { rm } from 'node:fs/promises';
 import test from 'node:test';
 import { NodePocketBase } from './support/node-pocketbase';
+import {
+	createMigrationTestFixture,
+	startPocketBase,
+	stopPocketBase
+} from './support/pocketbase-test-server';
 
-const projectDirectory = resolve(import.meta.dirname, '..');
 const migrationName = '1786740700_add_atomic_race_settlement.js';
 const serviceEmail = 'settlement-migration@example.com';
 const servicePassword = 'settlement-migration-password';
 
-async function waitForPocketBase(url: string): Promise<void> {
-	for (let attempt = 0; attempt < 100; attempt++) {
-		try {
-			if ((await fetch(`${url}/api/health`)).ok) return;
-		} catch {
-			// The child process is still starting.
-		}
-		await new Promise((resolveWait) => setTimeout(resolveWait, 25));
-	}
-	throw new Error('Timed out waiting for the PocketBase test server');
-}
-
-async function startPocketBase(
-	baseUrl: string,
-	port: number,
-	dataDirectory: string,
-	migrationsDirectory: string
-): Promise<ChildProcess> {
-	const server = spawn(
-		join(projectDirectory, 'pocketbase', 'pocketbase'),
-		[
-			'serve',
-			`--http=127.0.0.1:${port}`,
-			`--dir=${dataDirectory}`,
-			`--migrationsDir=${migrationsDirectory}`,
-			`--hooksDir=${join(projectDirectory, 'pocketbase', 'pb_hooks')}`,
-			'--hooksWatch=false'
-		],
-		{
-			cwd: projectDirectory,
-			env: {
-				...process.env,
-				PB_USER: serviceEmail,
-				PB_PASS: servicePassword
-			} as unknown as NodeJS.ProcessEnv,
-			stdio: 'ignore'
-		}
-	);
-	await waitForPocketBase(baseUrl);
-	return server;
-}
-
-async function stopPocketBase(server: ChildProcess): Promise<void> {
-	if (server.exitCode !== null) return;
-	server.kill('SIGTERM');
-	await once(server, 'exit');
-}
-
 test('migration reconstructs settled awards and freezes only unsettled legacy prize curves', async () => {
-	const testDirectory = await mkdtemp(join(tmpdir(), 'prl-settlement-migration-'));
-	const dataDirectory = join(testDirectory, 'data');
-	const legacyMigrations = join(testDirectory, 'legacy-migrations');
-	await mkdir(dataDirectory);
-	await mkdir(legacyMigrations);
-	const migrationsDirectory = join(projectDirectory, 'pocketbase', 'pb_migrations');
-	for (const file of await readdir(migrationsDirectory)) {
-		if (file.endsWith('.js') && file < migrationName) {
-			await copyFile(join(migrationsDirectory, file), join(legacyMigrations, basename(file)));
-		}
-	}
-
-	const port = 18_000 + Math.floor(Math.random() * 10_000);
-	const baseUrl = `http://127.0.0.1:${port}`;
+	const fixture = await createMigrationTestFixture('prl-settlement-migration-', migrationName);
+	const { testDirectory, dataDirectory, legacyMigrations, migrationsDirectory, port, baseUrl } =
+		fixture;
 	let server: ChildProcess | undefined;
 	try {
-		server = await startPocketBase(baseUrl, port, dataDirectory, legacyMigrations);
+		server = await startPocketBase({
+			baseUrl,
+			port,
+			dataDirectory,
+			migrationsDirectory: legacyMigrations,
+			serviceEmail,
+			servicePassword
+		});
 		let client = new NodePocketBase(baseUrl);
 		client.autoCancellation(false);
 		await client.collection('users').authWithPassword(serviceEmail, servicePassword);
@@ -134,7 +83,14 @@ test('migration reconstructs settled awards and freezes only unsettled legacy pr
 		);
 
 		await stopPocketBase(server);
-		server = await startPocketBase(baseUrl, port, dataDirectory, migrationsDirectory);
+		server = await startPocketBase({
+			baseUrl,
+			port,
+			dataDirectory,
+			migrationsDirectory,
+			serviceEmail,
+			servicePassword
+		});
 		client = new NodePocketBase(baseUrl);
 		client.autoCancellation(false);
 		await client.collection('users').authWithPassword(serviceEmail, servicePassword);
