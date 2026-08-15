@@ -9,7 +9,6 @@
 	import { getRacersContext, setRacersContext, subscribeToRacers } from '$lib/stores/racer.svelte';
 	import { setRacetracksContext } from '$lib/stores/racetrack.svelte';
 
-	import { subscribeToPush } from '$lib/subscribe';
 	import { onMount, untrack } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import '../app.css';
@@ -27,6 +26,18 @@
 		untrack(() => syncUserContext(user, latestUser));
 	});
 
+	$effect(() => {
+		const theme = user.options?.theme ?? 'system';
+		if (theme === 'system') delete document.documentElement.dataset.theme;
+		else document.documentElement.dataset.theme = theme;
+		document.documentElement.dataset.reducedMotion = String(
+			user.options?.accessibility?.reducedMotion ?? false
+		);
+		document.documentElement.dataset.highContrast = String(
+			user.options?.accessibility?.highContrast ?? false
+		);
+	});
+
 	//init client
 	const pb = setPBContext();
 	if (data.racers && data.races && data.racetracks) {
@@ -41,7 +52,6 @@
 			subscribeToRaces(getRacesContext(), pb),
 			subscribeToRacers(getRacersContext(), pb)
 		]);
-		await subscribeToPush();
 		//set theme color (status bar on mobile devices) from base color variable
 		const barColor = window.getComputedStyle(document.body).getPropertyValue('--color-base-200');
 		const themeColor = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement;

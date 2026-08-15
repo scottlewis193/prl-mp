@@ -55,7 +55,13 @@ test('account settings persist preferences without discarding other user data', 
 		name: 'Misty',
 		watchlist: ['racer-7'],
 		options: {
-			raceViewer: { leaderboardMode: 'interval', isViewing: true },
+			raceViewer: {
+				cameraMode: 'free',
+				leaderboardMode: 'interval',
+				isViewing: true
+			},
+			theme: 'system',
+			accessibility: { reducedMotion: false, highContrast: false },
 			notifications: { raceStarted: true }
 		}
 	};
@@ -66,7 +72,9 @@ test('account settings persist preferences without discarding other user data', 
 		name: 'Champion Misty',
 		options: {
 			...currentUser.options,
-			raceViewer: { leaderboardMode: 'leader', isViewing: true }
+			raceViewer: { cameraMode: 'follow', leaderboardMode: 'leader', isViewing: true },
+			theme: 'dark',
+			accessibility: { reducedMotion: true, highContrast: true }
 		}
 	};
 	const locals = {
@@ -89,7 +97,14 @@ test('account settings persist preferences without discarding other user data', 
 	};
 
 	const result = await settingsActions.updateAccount({
-		request: requestWith({ name: ' Champion Misty ', leaderboardMode: 'leader' }),
+		request: requestWith({
+			name: ' Champion Misty ',
+			cameraMode: 'follow',
+			leaderboardMode: 'leader',
+			theme: 'dark',
+			reducedMotion: 'on',
+			highContrast: 'on'
+		}),
 		locals
 	} as never);
 
@@ -99,7 +114,13 @@ test('account settings persist preferences without discarding other user data', 
 			value: {
 				name: 'Champion Misty',
 				options: {
-					raceViewer: { leaderboardMode: 'leader', isViewing: true },
+					raceViewer: {
+						cameraMode: 'follow',
+						leaderboardMode: 'leader',
+						isViewing: true
+					},
+					theme: 'dark',
+					accessibility: { reducedMotion: true, highContrast: true },
 					notifications: { raceStarted: true }
 				}
 			}
@@ -113,7 +134,12 @@ test('account settings persist preferences without discarding other user data', 
 test('account settings reject invalid preferences before updating PocketBase', async () => {
 	let collectionCalled = false;
 	const result = await settingsActions.updateAccount({
-		request: requestWith({ name: 'Misty', leaderboardMode: 'fastest' }),
+		request: requestWith({
+			name: 'Misty',
+			cameraMode: 'free',
+			leaderboardMode: 'fastest',
+			theme: 'system'
+		}),
 		locals: {
 			user: {
 				id: 'player-1',
@@ -130,6 +156,29 @@ test('account settings reject invalid preferences before updating PocketBase', a
 	assert.equal(collectionCalled, false);
 	assert.equal('status' in result && result.status, 400);
 	assert.equal('data' in result && result.data.error, 'Choose a valid leaderboard mode');
+});
+
+test('account settings reject unsupported camera and theme preferences', async () => {
+	for (const fields of [
+		{ cameraMode: 'cinematic', leaderboardMode: 'interval', theme: 'system' },
+		{ cameraMode: 'free', leaderboardMode: 'interval', theme: 'neon' }
+	]) {
+		let collectionCalled = false;
+		const result = await settingsActions.updateAccount({
+			request: requestWith({ name: 'Misty', ...fields }),
+			locals: {
+				user: { id: 'player-1', options: {} },
+				pb: {
+					collection: () => {
+						collectionCalled = true;
+					}
+				}
+			}
+		} as never);
+
+		assert.equal(collectionCalled, false);
+		assert.equal('status' in result && result.status, 400);
+	}
 });
 
 test('protected account navigation sends an unauthenticated player to login', async () => {

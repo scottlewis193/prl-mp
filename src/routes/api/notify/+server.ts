@@ -4,7 +4,8 @@ import webpush from 'web-push';
 
 import { VAPID_PRIVATE_KEY } from '$env/static/private';
 import { PUBLIC_VAPID_PUBLIC_KEY } from '$env/static/public';
-import { getSubscriptions } from '$lib/server/subscriptions'; // your own subscription store
+import { getSubscriptions, removeSubscriptionByEndpoint } from '$lib/server/subscriptions';
+import { isExpiredPushEndpoint } from '$lib/server/pushDelivery';
 import { hasServerCredentials, SERVER_USER_ID } from '$lib/server/pocketbase';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
@@ -44,6 +45,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			successCount++;
 		} catch (err) {
 			console.error('Push failed:', err);
+			if (isExpiredPushEndpoint(err)) {
+				await removeSubscriptionByEndpoint(sub.endpoint).catch(() => undefined);
+			}
 			failCount++;
 		}
 	}

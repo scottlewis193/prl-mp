@@ -1,4 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { parseSettingsPreferences } from '$lib/settingsPreferences';
 
 export const load = async ({ locals }) => {
 	if (!locals.user) return redirect(303, '/login');
@@ -11,12 +12,11 @@ export const actions = {
 
 		const formData = await request.formData();
 		const name = formData.get('name')?.toString().trim() ?? '';
-		const leaderboardMode = formData.get('leaderboardMode')?.toString();
+		const parsedPreferences = parseSettingsPreferences(formData);
 
 		if (!name) return fail(400, { error: 'Display name is required' });
-		if (leaderboardMode !== 'interval' && leaderboardMode !== 'leader') {
-			return fail(400, { error: 'Choose a valid leaderboard mode' });
-		}
+		if (!parsedPreferences.ok) return fail(400, { error: parsedPreferences.error });
+		const preferences = parsedPreferences.preferences;
 
 		const currentOptions = locals.user.options ?? {};
 		const currentRaceViewer = currentOptions.raceViewer ?? {};
@@ -26,9 +26,15 @@ export const actions = {
 				name,
 				options: {
 					...currentOptions,
+					theme: preferences.theme,
+					accessibility: {
+						reducedMotion: preferences.reducedMotion,
+						highContrast: preferences.highContrast
+					},
 					raceViewer: {
 						...currentRaceViewer,
-						leaderboardMode
+						cameraMode: preferences.cameraMode,
+						leaderboardMode: preferences.leaderboardMode
 					}
 				}
 			});

@@ -7,11 +7,13 @@
 	import type { Pokemon, Racer, SortedRacer } from '$lib/types';
 	import { onMount } from 'svelte';
 	import { flip } from 'svelte/animate';
+	import { getUserContext } from '$lib/stores/user.svelte';
 
 	let racers = getCurrentRacersContext();
 	let camera = getCameraContext();
 	const race = getCurrentRaceContext();
 	const racetrack = getCurrentRacetrackContext();
+	const user = getUserContext();
 
 	const checkpoints: { index: number; x: number; y: number }[] = racetrack.checkpoints;
 
@@ -97,7 +99,9 @@
 	let sortInterval: NodeJS.Timeout;
 	let sortDelayFinished: boolean = false;
 	let sortedRacers: SortedRacer[] = $state([]);
-	let mode: 'Interval' | 'Leader' = $state('Interval');
+	let mode: 'Interval' | 'Leader' = $state(
+		user?.options?.raceViewer?.leaderboardMode === 'leader' ? 'Leader' : 'Interval'
+	);
 
 	onMount(() => {
 		//sort racers in 1 second intervals
@@ -235,6 +239,7 @@
 					<input
 						type="checkbox"
 						class="toggle toggle-xs mt-[0.5px]"
+						checked={mode === 'Leader'}
 						onchange={(event) => {
 							const target = event.target as HTMLInputElement;
 							mode = target.checked ? 'Leader' : 'Interval';

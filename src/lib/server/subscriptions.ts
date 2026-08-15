@@ -1,23 +1,13 @@
 import type { PushSubscription } from 'web-push';
 import pb from './pocketbase';
+import { createSubscriptionRepository } from './subscriptionRepository';
 
-export async function addSubscription(subscription: PushSubscription) {
-	const endpoint = subscription.endpoint;
+const repository = createSubscriptionRepository(pb);
 
-	// Check if a record already exists with this endpoint
-	const existing = await pb
-		.collection('subscriptions')
-		.getFirstListItem(`endpoint="${endpoint}"`)
-		.catch(() => null);
-
-	if (!existing) {
-		await pb.collection('subscriptions').create({
-			endpoint: subscription.endpoint,
-			keys: subscription.keys,
-			expirationTime: subscription.expirationTime
-		});
-	}
-}
+export const saveSubscription = repository.save;
+export const removeSubscription = repository.remove;
+export const hasSubscription = repository.has;
+export const removeSubscriptionByEndpoint = repository.removeEndpoint;
 
 export async function getSubscriptions(): Promise<PushSubscription[]> {
 	const records = await pb.collection('subscriptions').getFullList();

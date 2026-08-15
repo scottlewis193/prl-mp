@@ -1,5 +1,6 @@
 import type { Sprite, Texture } from 'pixi.js';
 import type { AuthRecord } from 'pocketbase';
+import type { CameraMode, LeaderboardMode, Theme } from './settingsPreferences';
 
 export type RaceType = {
 	id?: string;
@@ -368,8 +369,14 @@ export type User = AuthRecord & {
 	avatar: string;
 	options: {
 		raceViewer: {
-			leaderboardMode: 'interval' | 'leader';
+			cameraMode?: CameraMode;
+			leaderboardMode: LeaderboardMode;
 			isViewing: boolean;
+		};
+		theme?: Theme;
+		accessibility?: {
+			reducedMotion: boolean;
+			highContrast: boolean;
 		};
 	};
 	watchlist: string[];

@@ -6,12 +6,23 @@
 	import PixiTrackRenderer from './PixiTrackRenderer.svelte';
 	import { getCurrentRacetrackContext } from '$lib/stores/racetrack.svelte';
 	import type { Camera } from '$lib/types';
+	import { getUserContext } from '$lib/stores/user.svelte';
+	import { getLeadingRacer } from '$lib/raceProgress';
 
 	const _race = getCurrentRaceContext();
 	const _racers = getCurrentRacersContext();
 	const _racetrack = getCurrentRacetrackContext();
 
 	const camera: Camera = setCameraContext();
+	const user = getUserContext();
+
+	$effect(() => {
+		if (user?.options?.raceViewer?.cameraMode !== 'follow') return;
+		const leader = getLeadingRacer(_racers, _racetrack);
+		if (!leader?.id) return;
+		camera.mode = 'follow';
+		camera.targetRacerId = leader.id;
+	});
 </script>
 
 {#if _race}

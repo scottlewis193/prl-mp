@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { getUserContext } from '$lib/stores/user.svelte';
+	import SettingsPreferences from '$lib/components/SettingsPreferences.svelte';
+	import PushNotificationSettings from '$lib/components/PushNotificationSettings.svelte';
 	import type { ActionData } from './$types';
 
 	let { form }: { form: ActionData } = $props();
@@ -20,43 +22,10 @@
 				<div class="alert alert-success"><span>Account settings saved.</span></div>
 			{/if}
 
-			<form method="POST" action="?/updateAccount" class="flex flex-col gap-5">
-				<label class="fieldset">
-					<span class="fieldset-legend">Email</span>
-					<input class="input w-full" type="email" value={user?.email ?? ''} disabled />
-				</label>
+			<SettingsPreferences {user} />
 
-				<label class="fieldset">
-					<span class="fieldset-legend">Display name</span>
-					<input
-						class="input w-full"
-						name="name"
-						required
-						maxlength="150"
-						value={user?.name ?? ''}
-					/>
-				</label>
-
-				<label class="fieldset">
-					<span class="fieldset-legend">Leaderboard display</span>
-					<select class="select w-full" name="leaderboardMode">
-						<option
-							value="interval"
-							selected={(user?.options?.raceViewer?.leaderboardMode ?? 'interval') === 'interval'}
-							>Time intervals</option
-						>
-						<option
-							value="leader"
-							selected={user?.options?.raceViewer?.leaderboardMode === 'leader'}
-							>Distance from leader</option
-						>
-					</select>
-				</label>
-
-				<div class="card-actions justify-end">
-					<button class="btn btn-primary" type="submit">Save settings</button>
-				</div>
-			</form>
+			<div class="divider"></div>
+			<PushNotificationSettings />
 		</div>
 	</div>
 </div>
