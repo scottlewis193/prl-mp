@@ -32,7 +32,7 @@ test('exchange renders selected range, real information and missing values', asy
 		props: {
 			selectedRange: '1d',
 			hasPriceHistory: true,
-			holding: undefined,
+			holding: { quantity: 5, costBasis: 40 },
 			snapshot: {
 				currentPrice: 10,
 				daily: { high: 10, low: 8 },
@@ -60,7 +60,10 @@ test('exchange renders selected range, real information and missing values', asy
 	assert.match(body, /aria-pressed="true"[^>]*>1d</);
 	assert.match(body, /Total earnings/i);
 	assert.match(body, /Level<\/strong><span>12/);
-	assert.match(body, /No holdings data available/i);
+	assert.match(body, /Shares<\/strong><span>5/);
+	assert.match(body, /Cost basis<\/strong><span>₽40/);
+	assert.match(body, /Value<\/strong><span>₽50/);
+	assert.match(body, /Return<\/strong><span[^>]*>₽10 \(25\.00%\)/);
 	for (const range of ['7d', '1m', '3m', '6m', '1y', 'all']) {
 		const { body: selectedRangeBody } = render(ExchangeReadout, {
 			props: {
@@ -81,7 +84,7 @@ test('exchange renders selected range, real information and missing values', asy
 		props: {
 			selectedRange: '1d',
 			hasPriceHistory: false,
-			holding: { playerId: 'user-1', sharesOwned: 5 },
+			holding: { quantity: 5, costBasis: 40 },
 			snapshot: {
 				currentPrice: null,
 				daily: { high: null, low: null },

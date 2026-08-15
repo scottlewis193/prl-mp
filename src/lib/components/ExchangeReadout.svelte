@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { ChartRange } from '$lib/exchangeMarket';
 	import { formatMarketNumber, formatMarketPrice } from '$lib/exchangePresentation';
+	import type { TradeHolding } from '$lib/exchangeTrade';
 	import type { Racer } from '$lib/types';
 
 	type Snapshot = {
@@ -18,7 +19,7 @@
 	}: {
 		racer: Racer;
 		snapshot: Snapshot;
-		holding?: { playerId: string; sharesOwned: number };
+		holding?: TradeHolding;
 		hasPriceHistory: boolean;
 		selectedRange?: ChartRange;
 	} = $props();
@@ -36,6 +37,17 @@
 		racer.financials?.earningsPerShare && snapshot.currentPrice !== null
 			? snapshot.currentPrice / racer.financials.earningsPerShare
 			: null
+	);
+	const holdingValue = $derived(
+		holding && snapshot.currentPrice !== null ? holding.quantity * snapshot.currentPrice : null
+	);
+	const holdingReturn = $derived(
+		holdingValue === null || !holding ? null : holdingValue - holding.costBasis
+	);
+	const holdingReturnPercentage = $derived(
+		holdingReturn === null || !holding || holding.costBasis <= 0
+			? null
+			: (holdingReturn / holding.costBasis) * 100
 	);
 
 	function formatDate(value: string | undefined) {
@@ -64,20 +76,25 @@
 	<h2 class="text-base">Your Investment</h2>
 	<div class="card bg-base-100">
 		<div class="card-body">
-			{#if holding && holding.sharesOwned > 0}
+			{#if holding && holding.quantity > 0}
 				<div class="flex justify-between">
-					<strong>Value</strong><span
-						>{formatMarketPrice(
-							snapshot.currentPrice === null ? null : holding.sharesOwned * snapshot.currentPrice
-						)}</span
+					<strong>Shares</strong><span>{formatMarketNumber(holding.quantity)}</span>
+				</div>
+				<div class="flex justify-between">
+					<strong>Cost basis</strong><span>{formatMarketPrice(holding.costBasis)}</span>
+				</div>
+				<div class="flex justify-between">
+					<strong>Value</strong><span>{formatMarketPrice(holdingValue)}</span>
+				</div>
+				<div class="flex justify-between">
+					<strong>Return</strong><span
+						class:text-success={(holdingReturn ?? 0) > 0}
+						class:text-error={(holdingReturn ?? 0) < 0}
+						>{holdingReturn === null || holdingReturnPercentage === null
+							? 'N/A'
+							: `${formatMarketPrice(holdingReturn)} (${holdingReturnPercentage.toFixed(2)}%)`}</span
 					>
 				</div>
-				<div class="flex justify-between">
-					<strong>Shares</strong><span>{formatMarketNumber(holding.sharesOwned)}</span>
-				</div>
-				<p class="text-base-content/70 text-xs">
-					Return and average price are unavailable because cost-basis data is not recorded.
-				</p>
 			{:else}
 				<p class="text-base-content/70">No holdings data available.</p>
 			{/if}

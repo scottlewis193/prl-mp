@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { PUBLIC_PB_URL } from '$env/static/public';
 	import ExchangeReadout from '$lib/components/ExchangeReadout.svelte';
+	import ExchangeTradeForm from '$lib/components/ExchangeTradeForm.svelte';
+	import type { TradeOrder } from '$lib/exchangeTrade';
+	import { executeAndRefreshTrade } from '$lib/exchangeTradeClient';
 	import { getMarketSnapshot, getPriceHistoryForRange, type ChartRange } from '$lib/exchangeMarket';
 	import { formatMarketMovement, formatMarketPrice } from '$lib/exchangePresentation';
 	import { getExchangePageContext } from '$lib/stores/exchange.svelte';
@@ -19,12 +22,11 @@
 	const pokemon = $derived(racer?.expand?.pokemon);
 	const history = $derived(racer?.financials?.priceHistory ?? []);
 	const snapshot = $derived(getMarketSnapshot(history));
+	const tradeUnitPrice = $derived(Number(racer?.financials?.currentSharePrice));
 	let selectedRange = $state<ChartRange>('1d');
 	const chartPoints = $derived(getPriceHistoryForRange(history, selectedRange));
 	const watchlist = $derived(user?.watchlist ?? []);
-	const holding = $derived(
-		racer?.ownership?.shareholders?.find((entry) => entry.playerId === user?.id)
-	);
+	const holding = $derived(exchangePage.holdings.find((entry) => entry.racer === racer?.id));
 	let isUpdatingWatchlist = $state(false);
 	let watchlistError = $state('');
 	let chart: Chart | undefined;
@@ -86,6 +88,16 @@
 		} finally {
 			isUpdatingWatchlist = false;
 		}
+	}
+
+	async function submitTrade(order: TradeOrder) {
+		if (!racer?.id || !user?.id) throw new Error('Sign in to trade shares.');
+		const result = await executeAndRefreshTrade(pb, racer.id, order);
+		const holdingIndex = exchangePage.holdings.findIndex((entry) => entry.racer === racer.id);
+		if (holdingIndex >= 0) exchangePage.holdings[holdingIndex] = result.holding;
+		else exchangePage.holdings.push(result.holding);
+		racer.financials.outstandingShares = result.availableSupply;
+		syncUserContext(user, result.user);
 	}
 
 	$effect(() => {
@@ -195,6 +207,16 @@
 					hasPriceHistory={history.length > 0}
 					bind:selectedRange
 				/>
+
+				{#if user?.id}
+					<ExchangeTradeForm
+						unitPrice={tradeUnitPrice}
+						balance={Number(user.balance ?? 0)}
+						availableSupply={Number(racer.financials?.outstandingShares ?? 0)}
+						ownedQuantity={holding?.quantity ?? 0}
+						{submitTrade}
+					/>
+				{/if}
 			</div>
 		{:else}
 			<div class="flex h-full w-full items-center justify-center">

@@ -382,6 +382,15 @@ export type User = AuthRecord & {
 	watchlist: string[];
 	isFake: boolean;
 	isAdmin: boolean;
+	balance: number;
+};
+
+export type Holding = {
+	id?: string;
+	player: string;
+	racer: string;
+	quantity: number;
+	costBasis: number;
 };
 
 export type EventType = {
@@ -397,6 +406,7 @@ export type EventType = {
 export type ExchangePage = {
 	activeRacer: Racer | undefined;
 	showDetails: boolean;
+	holdings: Holding[];
 };
 
 export type LeagueType = {

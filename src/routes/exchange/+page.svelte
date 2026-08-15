@@ -2,7 +2,9 @@
 	import InstrumentDetails from '$lib/components/InstrumentDetails.svelte';
 	import RacerList from '$lib/components/RacerList.svelte';
 	import { setExchangePageContext } from '$lib/stores/exchange.svelte.js';
-	let exchangePage = setExchangePageContext();
+	import type { Holding } from '$lib/types';
+	let { data }: { data: { holdings: Holding[] } } = $props();
+	let exchangePage = setExchangePageContext(data.holdings);
 </script>
 
 <div class="flex w-full justify-center">

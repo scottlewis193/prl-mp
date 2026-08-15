@@ -129,7 +129,14 @@ test('buying derives the total from the racer price and atomically records balan
 	const player = await registerPlayer('buyer@example.com');
 	const result = (await player.send('/api/prl/economy/trade', {
 		method: 'POST',
-		body: { racerId: 'prlseedracer001', quantity: 5, total: 1 }
+		body: {
+			racerId: 'prlseedracer001',
+			side: 'buy',
+			quantity: 5,
+			total: 1,
+			idempotencyKey: 'buy-5',
+			expectedUnitPrice: 10
+		}
 	})) as {
 		balance: number;
 		holding: { quantity: number; costBasis: number };
@@ -137,7 +144,8 @@ test('buying derives the total from the racer price and atomically records balan
 
 	assert.deepEqual(result, {
 		balance: 9_950,
-		holding: { quantity: 5, costBasis: 50 }
+		holding: { quantity: 5, costBasis: 50 },
+		availableSupply: 995
 	});
 	const refreshed = await player.collection('users').authRefresh();
 	assert.equal(refreshed.record.balance, 9_950);
@@ -188,19 +196,32 @@ test('selling credits the server-priced proceeds and reduces cost basis proporti
 	const player = await registerPlayer('seller@example.com');
 	await player.send('/api/prl/economy/trade', {
 		method: 'POST',
-		body: { racerId: 'prlseedracer001', quantity: 5 }
+		body: {
+			racerId: 'prlseedracer005',
+			side: 'buy',
+			quantity: 5,
+			idempotencyKey: 'buy-before-sale',
+			expectedUnitPrice: 10
+		}
 	});
 
 	const result = await player.send('/api/prl/economy/trade', {
 		method: 'POST',
-		body: { racerId: 'prlseedracer001', quantity: -2 }
+		body: {
+			racerId: 'prlseedracer005',
+			side: 'sell',
+			quantity: 2,
+			idempotencyKey: 'sell-2',
+			expectedUnitPrice: 10
+		}
 	});
 	assert.deepEqual(result, {
 		balance: 9_970,
-		holding: { quantity: 3, costBasis: 30 }
+		holding: { quantity: 3, costBasis: 30 },
+		availableSupply: 997
 	});
 
-	const holding = await player.collection('holdings').getFirstListItem('racer = "prlseedracer001"');
+	const holding = await player.collection('holdings').getFirstListItem('racer = "prlseedracer005"');
 	assert.deepEqual(
 		{ quantity: holding.quantity, costBasis: holding.costBasis },
 		{ quantity: 3, costBasis: 30 }
@@ -250,7 +271,13 @@ test('insufficient funds and direct economic mutations are rejected without part
 		() =>
 			player.send('/api/prl/economy/trade', {
 				method: 'POST',
-				body: { racerId: 'prlseedracer001', quantity: 1_001 }
+				body: {
+					racerId: 'prlseedracer006',
+					side: 'buy',
+					quantity: 1_001,
+					idempotencyKey: 'too-expensive',
+					expectedUnitPrice: 10
+				}
 			}),
 		(error: { status?: number; message?: string }) =>
 			error.status === 400 && error.message === 'Insufficient funds.'
@@ -295,10 +322,16 @@ test('concurrent purchases cannot overspend and ledger totals reconcile to the d
 		.authWithPassword('concurrent-buyer@example.com', 'player-password');
 
 	const attempts = await Promise.allSettled(
-		[firstClient, secondClient].map((client) =>
+		[firstClient, secondClient].map((client, index) =>
 			client.send('/api/prl/economy/trade', {
 				method: 'POST',
-				body: { racerId: 'prlseedracer001', quantity: 600 }
+				body: {
+					racerId: 'prlseedracer007',
+					side: 'buy',
+					quantity: 600,
+					idempotencyKey: `concurrent-buy-${index}`,
+					expectedUnitPrice: 10
+				}
 			})
 		)
 	);
@@ -325,4 +358,131 @@ test('concurrent purchases cannot overspend and ledger totals reconcile to the d
 		entries.reduce((total, entry) => total + entry.quantityDelta, 0),
 		holding.quantity
 	);
+});
+
+test('purchases enforce and atomically reduce available racer supply', async () => {
+	const buyer = await registerPlayer('supply-buyer@example.com');
+	const otherBuyer = await registerPlayer('supply-other@example.com');
+	const result = await buyer.send('/api/prl/economy/trade', {
+		method: 'POST',
+		body: {
+			racerId: 'prlseedracer002',
+			side: 'buy',
+			quantity: 1_000,
+			idempotencyKey: 'take-all-supply',
+			expectedUnitPrice: 10
+		}
+	});
+	assert.deepEqual(result, {
+		balance: 0,
+		holding: { quantity: 1_000, costBasis: 10_000 },
+		availableSupply: 0
+	});
+	await assert.rejects(
+		() =>
+			otherBuyer.send('/api/prl/economy/trade', {
+				method: 'POST',
+				body: {
+					racerId: 'prlseedracer002',
+					side: 'buy',
+					quantity: 1,
+					idempotencyKey: 'supply-exhausted',
+					expectedUnitPrice: 10
+				}
+			}),
+		(error: { status?: number; message?: string }) =>
+			error.status === 400 && error.message === 'Insufficient share supply.'
+	);
+	const racer = await serviceClient.collection('racers').getOne('prlseedracer002');
+	assert.equal(racer.financials.outstandingShares, 0);
+});
+
+test('duplicate trade submissions return the original result without charging twice', async () => {
+	const player = await registerPlayer('idempotent-buyer@example.com');
+	const request = {
+		method: 'POST',
+		body: {
+			racerId: 'prlseedracer003',
+			side: 'buy',
+			quantity: 4,
+			idempotencyKey: 'stable-client-request',
+			expectedUnitPrice: 10
+		}
+	};
+	const [first, duplicate] = await Promise.all([
+		player.send('/api/prl/economy/trade', request),
+		player.send('/api/prl/economy/trade', request)
+	]);
+	assert.deepEqual(duplicate, first);
+	const refreshed = await player.collection('users').authRefresh();
+	assert.equal(refreshed.record.balance, 9_960);
+	const entries = await player.collection('accountLedger').getFullList({ filter: 'type = "buy"' });
+	assert.equal(entries.length, 1);
+});
+
+test('a changed server price rejects the stale preview without partial updates', async () => {
+	const player = await registerPlayer('stale-quote@example.com');
+	await assert.rejects(
+		() =>
+			player.send('/api/prl/economy/trade', {
+				method: 'POST',
+				body: {
+					racerId: 'prlseedracer008',
+					side: 'buy',
+					quantity: 2,
+					idempotencyKey: 'stale-price',
+					expectedUnitPrice: 9
+				}
+			}),
+		(error: { status?: number; message?: string }) =>
+			error.status === 400 && error.message === 'The share price changed. Review the updated quote.'
+	);
+	const refreshed = await player.collection('users').authRefresh();
+	assert.equal(refreshed.record.balance, startingBalance);
+	assert.deepEqual(await player.collection('holdings').getFullList(), []);
+	const entries = await player.collection('accountLedger').getFullList();
+	assert.deepEqual(
+		entries.map((entry) => entry.type),
+		['account_opened']
+	);
+});
+
+test('concurrent sales cannot oversell a holding', async () => {
+	const firstClient = await registerPlayer('concurrent-seller@example.com');
+	const secondClient = pocketBaseClient();
+	secondClient.autoCancellation(false);
+	await secondClient
+		.collection('users')
+		.authWithPassword('concurrent-seller@example.com', 'player-password');
+	await firstClient.send('/api/prl/economy/trade', {
+		method: 'POST',
+		body: {
+			racerId: 'prlseedracer004',
+			side: 'buy',
+			quantity: 10,
+			idempotencyKey: 'seed-sale-holding',
+			expectedUnitPrice: 10
+		}
+	});
+
+	const attempts = await Promise.allSettled(
+		[firstClient, secondClient].map((client, index) =>
+			client.send('/api/prl/economy/trade', {
+				method: 'POST',
+				body: {
+					racerId: 'prlseedracer004',
+					side: 'sell',
+					quantity: 7,
+					idempotencyKey: `concurrent-sell-${index}`,
+					expectedUnitPrice: 10
+				}
+			})
+		)
+	);
+	assert.equal(attempts.filter((attempt) => attempt.status === 'fulfilled').length, 1);
+	assert.equal(attempts.filter((attempt) => attempt.status === 'rejected').length, 1);
+	const holding = await firstClient
+		.collection('holdings')
+		.getFirstListItem('racer = "prlseedracer004"');
+	assert.equal(holding.quantity, 3);
 });
