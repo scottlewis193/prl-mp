@@ -13,9 +13,16 @@ const racetrack: RaceTrack = {
 	],
 	data: {},
 	tileset: '',
+	length: 200,
 	totalLength: 200,
 	width: 64,
-	maxSize: { x: 100, y: 100 }
+	maxSize: { x: 100, y: 100 },
+	surface: 'asphalt',
+	hazards: [],
+	corneringDemand: 0,
+	speedBias: 0,
+	risk: 0,
+	compatibleFormats: ['circuit']
 };
 
 const race: Race = {
@@ -55,8 +62,53 @@ test('simulates a racer using the race track referenced by the race', () => {
 		lastUpdatedAt: new Date(1_000).toISOString(),
 		finished: false,
 		x: 10,
-		y: 0
+		y: 0,
+		trackContext: {
+			trackId: 'track-1',
+			suitability: {
+				racerSpeed: 10,
+				racerHandling: 0,
+				track: {
+					length: 200,
+					width: 64,
+					surface: 'asphalt',
+					hazards: [],
+					corneringDemand: 0,
+					speedBias: 0,
+					risk: 0,
+					compatibleFormats: ['circuit']
+				}
+			},
+			incident: {
+				racerResilience: 0,
+				trackRisk: 0,
+				corneringDemand: 0,
+				hazards: []
+			},
+			speedMultiplier: 1
+		}
 	});
+});
+
+test('applies the selected track speed bias through the generic suitability input', () => {
+	const speedTrack = {
+		...racetrack,
+		speedBias: 1,
+		risk: 0.4,
+		corneringDemand: 0.7,
+		hazards: [{ type: 'crosswind', severity: 0.6, checkpointIndex: 1 }]
+	};
+	const result = simulateRacer(racer, speedTrack, 1_000, race.totalLaps);
+
+	assert.equal(result.distanceFromCheckpoint, 8.75);
+	assert.equal(result.x, 8.75);
+	assert.deepEqual(result.trackContext.incident, {
+		racerResilience: 0,
+		trackRisk: 0.4,
+		corneringDemand: 0.7,
+		hazards: [{ type: 'crosswind', severity: 0.6, checkpointIndex: 1 }]
+	});
+	assert.equal(result.trackContext.speedMultiplier, 0.875);
 });
 
 test('initialises a racer with no race timestamp before calculating movement', () => {

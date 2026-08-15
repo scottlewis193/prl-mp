@@ -140,7 +140,8 @@ async function simulateRace(
 				checkpointIndex: simulated.checkpointIndex,
 				distanceFromCheckpoint: simulated.distanceFromCheckpoint,
 				lapsCompleted: simulated.lapsCompleted,
-				lastUpdatedAt: simulated.lastUpdatedAt
+				lastUpdatedAt: simulated.lastUpdatedAt,
+				trackContext: simulated.trackContext
 			});
 			racer.positioning.x = simulated.x;
 			racer.positioning.y = simulated.y;

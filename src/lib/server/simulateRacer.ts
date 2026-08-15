@@ -1,4 +1,5 @@
 import type { Racer, RaceTrack } from '$lib/types';
+import { createTrackSimulationContext } from '../trackCharacteristics';
 import { recordLapTime, startLapTimer } from './lapTiming';
 
 const collisionThreshold = 64; // collision radius
@@ -14,6 +15,7 @@ export function simulateRacer(
 	const elapsed = Number.isFinite(lastUpdatedAt)
 		? Math.min(MAX_ELAPSED_SECONDS, Math.max(0, (now - lastUpdatedAt) / 1000))
 		: 0;
+	const trackContext = createTrackSimulationContext(racer, racetrack);
 
 	// Determine current speed
 	const pokemon = racer.expand.pokemon;
@@ -26,10 +28,14 @@ export function simulateRacer(
 			finished: true,
 			finishedAt: new Date(now).toISOString(),
 			x: 0,
-			y: 0
+			y: 0,
+			trackContext
 		};
 	}
-	const speed = racer.currentRace.finished ? pokemon.speed / 7 : pokemon.speed + racer.stats.speed;
+	const baseSpeed = racer.currentRace.finished
+		? pokemon.speed / 7
+		: pokemon.speed + racer.stats.speed;
+	const speed = baseSpeed * trackContext.speedMultiplier;
 
 	// Total distance to travel this tick
 	let distanceToTravel = racer.currentRace.distanceFromCheckpoint + speed * elapsed;
@@ -75,7 +81,8 @@ export function simulateRacer(
 					finished: true,
 					finishedAt,
 					x: checkpoints[0].x,
-					y: checkpoints[0].y
+					y: checkpoints[0].y,
+					trackContext
 				};
 			}
 		}
@@ -109,6 +116,7 @@ export function simulateRacer(
 		lastUpdatedAt: new Date(now).toISOString(),
 		finished: false,
 		x,
-		y
+		y,
+		trackContext
 	};
 }

@@ -1,4 +1,5 @@
 import type { RaceTrackType } from '$lib/types';
+import { getTrackCharacteristics } from './trackCharacteristics';
 
 const TILED_FLIP_HORIZONTAL = 0x80000000;
 const TILED_FLIP_VERTICAL = 0x40000000;
@@ -66,6 +67,12 @@ export type TrackRenderPlan = {
 	checkpoints: { index: number; x: number; y: number }[];
 	tilesets: (TiledTileset & { url: string })[];
 	layers: { name: string; opacity: number; tiles: TrackTile[] }[];
+	geometry: {
+		centerline: { index: number; x: number; y: number }[];
+		width: number;
+		surface: RaceTrackType['surface'];
+		hazards: { type: string; severity: number; x: number; y: number }[];
+	};
 	tileCount: number;
 };
 
@@ -221,6 +228,10 @@ export function createTrackRenderPlan(
 	const configuredHeight = (map.height ?? 0) * map.tileheight;
 	const measuredWidth = Number.isFinite(minPixelX) ? maxPixelX - minPixelX : 0;
 	const measuredHeight = Number.isFinite(minPixelY) ? maxPixelY - minPixelY : 0;
+	const characteristics = getTrackCharacteristics(track);
+	const checkpointByIndex = new Map(
+		checkpoints.map((checkpoint) => [checkpoint.index, checkpoint])
+	);
 
 	return {
 		size: {
@@ -230,6 +241,24 @@ export function createTrackRenderPlan(
 		checkpoints,
 		tilesets,
 		layers,
+		geometry: {
+			centerline: checkpoints.map((checkpoint) => ({ ...checkpoint })),
+			width: characteristics.width,
+			surface: characteristics.surface,
+			hazards: characteristics.hazards.flatMap((hazard) => {
+				const checkpoint = checkpointByIndex.get(hazard.checkpointIndex ?? Number.NaN);
+				return checkpoint
+					? [
+							{
+								type: hazard.type,
+								severity: hazard.severity,
+								x: checkpoint.x,
+								y: checkpoint.y
+							}
+						]
+					: [];
+			})
+		},
 		tileCount: layers.reduce((total, layer) => total + layer.tiles.length, 0)
 	};
 }

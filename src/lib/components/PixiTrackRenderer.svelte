@@ -16,6 +16,7 @@
 	import { getCurrentRacersContext, getPBImageDataUrl } from '$lib/stores/racer.svelte';
 	import { getCurrentRacetrackContext } from '$lib/stores/racetrack.svelte';
 	import { getWalkSpriteUrl } from '$lib/pokemonSpriteUrl';
+	import { initializeTrackGraphics } from '$lib/trackGraphics';
 	import pb from '$lib/pocketbase';
 	import {
 		createTrackRenderPlan,
@@ -233,6 +234,8 @@
 			}
 			destination.addChild(layer);
 		}
+
+		initializeTrackGraphics(destination, plan.geometry);
 	}
 
 	async function setupRacers(

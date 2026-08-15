@@ -56,6 +56,7 @@ routerAdd(
 		const scheduleOffsetMs = Number(body.scheduleOffsetMs ?? 14 * 60 * 60 * 1000);
 		const countdownMs = Number(body.countdownMs ?? 5 * 60 * 1000);
 		const totalLaps = Number(body.totalLaps ?? 5);
+		const raceFormat = require(`${__hooks}/trackSelection.cjs`).normalizeRaceFormat(body.format);
 		if (!Number.isInteger(futureEventCount) || futureEventCount < 1 || futureEventCount > 30) {
 			throw e.badRequestError('futureEventCount is outside the supported range.', {});
 		}
@@ -251,7 +252,12 @@ routerAdd(
 					scheduleOffsetMs;
 				if (slotMs <= nowMs) slotMs += eventIntervalMs;
 
-				const racetracks = txApp.findRecordsByFilter('racetracks', 'id != ""', 'id', 1, 0);
+				const racetracks = txApp
+					.findRecordsByFilter('racetracks', 'id != ""', 'id', 1000, 0)
+					.map((record) => {
+						const storedFormats = JSON.parse(toString(record.get('compatibleFormats')) || '[]');
+						return { id: record.id, record, compatibleFormats: storedFormats };
+					});
 				if (racetracks.length === 0) {
 					throw e.badRequestError(
 						'At least one racetrack is required to schedule league races.',
@@ -267,18 +273,25 @@ routerAdd(
 					}
 
 					const raceIds = [];
+					let trackSelectionIndex = Math.floor(slotMs / eventIntervalMs);
 					for (const league of leagues) {
 						const capacity = Math.max(1, league.getInt('maxPlayers'));
 						const selected = takeAvailableRacers(league.id, capacity);
 
 						const race = new Record(txApp.findCollectionByNameOrId('races'));
+						const selectedTrack = require(`${__hooks}/trackSelection.cjs`).selectCompatibleTrack(
+							racetracks,
+							raceFormat,
+							trackSelectionIndex++
+						);
 						race.set(
 							'name',
 							`${league.getString('name')} Race — ${new Date(slotMs).toISOString()}`
 						);
 						race.set('status', 'pending');
 						race.set('league', league.id);
-						race.set('racetrack', racetracks[0].id);
+						race.set('format', raceFormat);
+						race.set('racetrack', selectedTrack.id);
 						race.set('startTime', new Date(slotMs).toISOString());
 						race.set('totalLaps', totalLaps);
 						snapshotPrizeCurve(race, selected.length, league.getFloat('prizeMoneyScaling'));

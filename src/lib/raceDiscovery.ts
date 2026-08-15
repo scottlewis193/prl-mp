@@ -1,4 +1,5 @@
 import type { Race, Racer, RaceTrackType } from './types';
+import { getTrackCharacteristics } from './trackCharacteristics';
 
 export type RaceDiscoveryGroups = {
 	upcoming: Race[];
@@ -22,6 +23,25 @@ export type RacePresentation = {
 	prizeStructure: { position: number; amount: number }[];
 	results: RaceResult[];
 };
+
+const titleCase = (value: string) =>
+	value
+		.split('-')
+		.map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+		.join(' ');
+
+export function presentTrackCharacteristics(track: RaceTrackType) {
+	const characteristics = getTrackCharacteristics(track);
+	return {
+		...characteristics,
+		surfaceLabel: titleCase(characteristics.surface),
+		hazardLabels: characteristics.hazards.map((hazard) => titleCase(hazard.type)),
+		formatLabels: characteristics.compatibleFormats.map(titleCase),
+		corneringDemandPercent: Math.round(characteristics.corneringDemand * 100),
+		speedBiasPercent: Math.round(characteristics.speedBias * 100),
+		riskPercent: Math.round(characteristics.risk * 100)
+	};
+}
 
 function timestamp(value: Date | string): number {
 	const result = new Date(value).getTime();

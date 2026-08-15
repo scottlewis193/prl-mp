@@ -2,6 +2,9 @@ import type { Sprite, Texture } from 'pixi.js';
 import type { AuthRecord } from 'pocketbase';
 import type { CameraMode, LeaderboardMode, Theme } from './settingsPreferences';
 import type { SpeciesAssetState, SpeciesProvenance } from '$lib/species';
+import type { RaceFormat } from './raceFormat';
+
+export type { RaceFormat } from './raceFormat';
 
 export type AwardedPrize = { racerId: string; position: number; amount: number };
 
@@ -10,6 +13,7 @@ export type RaceType = {
 	name: string;
 	status: 'pending' | 'countdown' | 'running' | 'finished' | 'cancelled' | 'settled';
 	league?: string;
+	format?: RaceFormat;
 	racetrack: string;
 	winner: string;
 	finishingOrder: string[];
@@ -32,6 +36,7 @@ export class Race implements RaceType {
 	name: string = 'New Race';
 	status: 'pending' | 'countdown' | 'running' | 'finished' | 'cancelled' | 'settled' = 'pending';
 	league?: string;
+	format?: RaceFormat;
 	racetrack: string = '175hl67e5pvjjib';
 	winner: string = '';
 	finishingOrder: string[] = [];
@@ -86,6 +91,7 @@ type RacerType = {
 		lapStartTime?: number;
 		lapTimes: { [lapNumber: number]: number };
 		bestLapTime?: number;
+		trackContext?: TrackSimulationContext;
 	};
 	// --- 🏁 Career Performance ---
 	raceHistory: {
@@ -205,6 +211,7 @@ export class Racer implements RacerType {
 		lapStartTime?: number;
 		lapTimes: { [lapNumber: number]: number };
 		bestLapTime?: number;
+		trackContext?: TrackSimulationContext;
 	} = $state({
 		lapsCompleted: 0,
 		checkpointIndex: 0,
@@ -374,9 +381,56 @@ export type RaceTrackType = {
 	checkpoints: { index: number; x: number; y: number }[];
 	data: any;
 	tileset: string;
+	length: number;
 	totalLength: number;
 	width: number;
 	maxSize: { x: number; y: number };
+	surface: TrackSurface;
+	hazards: TrackHazard[];
+	corneringDemand: number;
+	speedBias: number;
+	risk: number;
+	compatibleFormats: RaceFormat[];
+};
+
+export type TrackSurface = 'asphalt' | 'dirt' | 'grass' | 'sand' | 'ice';
+
+export type TrackHazard = {
+	type: string;
+	severity: number;
+	checkpointIndex?: number;
+};
+
+export type TrackCharacteristics = Pick<
+	RaceTrackType,
+	| 'length'
+	| 'width'
+	| 'surface'
+	| 'hazards'
+	| 'corneringDemand'
+	| 'speedBias'
+	| 'risk'
+	| 'compatibleFormats'
+>;
+
+export type RacerSuitabilityInputs = {
+	racerSpeed: number;
+	racerHandling: number;
+	track: TrackCharacteristics;
+};
+
+export type IncidentInputs = {
+	racerResilience: number;
+	trackRisk: number;
+	corneringDemand: number;
+	hazards: TrackHazard[];
+};
+
+export type TrackSimulationContext = {
+	trackId: string;
+	suitability: RacerSuitabilityInputs;
+	incident: IncidentInputs;
+	speedMultiplier: number;
 };
 
 export class RaceTrack implements RaceTrackType {
@@ -385,9 +439,16 @@ export class RaceTrack implements RaceTrackType {
 	data: any = {};
 	checkpoints: { index: number; x: number; y: number }[] = [];
 	tileset: string = '';
+	length: number = 0;
 	totalLength: number = 0;
 	width: number = 0;
 	maxSize: { x: number; y: number } = { x: 0, y: 0 };
+	surface: TrackSurface = 'asphalt';
+	hazards: TrackHazard[] = [];
+	corneringDemand: number = 0;
+	speedBias: number = 0;
+	risk: number = 0;
+	compatibleFormats: RaceFormat[] = [];
 }
 
 export type User = AuthRecord & {
