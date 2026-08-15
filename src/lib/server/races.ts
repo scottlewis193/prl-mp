@@ -16,6 +16,9 @@ export async function createRace() {
 				race: race.id,
 				currentRace: {
 					...racer.currentRace,
+					trainerAtEntry: racer.trainer
+						? { status: 'attributed', trainerId: racer.trainer }
+						: { status: 'untrained' },
 					checkpointIndex: 0,
 					distanceFromCheckpoint: 0,
 					lapsCompleted: 0,

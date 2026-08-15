@@ -161,11 +161,13 @@ routerAdd(
 
 			const participants = [];
 			const racerById = {};
+			const trainerByRacerId = {};
 			for (const racer of racers) {
 				const currentRace = new DynamicModel({
 					finished: false,
 					finishedAt: '',
-					lastUpdatedAt: ''
+					lastUpdatedAt: '',
+					trainerAtEntry: {}
 				});
 				racer.unmarshalJSONField('currentRace', currentRace);
 				const history = new DynamicModel({
@@ -198,6 +200,23 @@ routerAdd(
 				const ownership = new DynamicModel({ totalShares: 0, shareholders: [] });
 				racer.unmarshalJSONField('ownership', ownership);
 				racerById[racer.id] = racer;
+				let trainerAtEntry = {};
+				try {
+					trainerAtEntry = JSON.parse(toString(racer.get('currentRace')))?.trainerAtEntry || {};
+				} catch {
+					trainerAtEntry = {};
+				}
+				const entryStatus = trainerAtEntry.status;
+				const entryTrainerId = trainerAtEntry.trainerId || '';
+				trainerByRacerId[racer.id] = {
+					status:
+						entryStatus === 'attributed' && entryTrainerId
+							? 'attributed'
+							: entryStatus === 'untrained'
+								? 'untrained'
+								: 'unknown_legacy',
+					trainerId: entryStatus === 'attributed' ? entryTrainerId : ''
+				};
 				participants.push({
 					id: racer.id,
 					finished: currentRace.finished,
@@ -251,6 +270,36 @@ routerAdd(
 				racer.set('financials', update.financials);
 				txApp.save(racer);
 			}
+
+			const trainerResultCollection = txApp.findCollectionByNameOrId('trainerRaceResults');
+			const affectedTrainerIds = {};
+			const trainerResultFacts = [];
+			for (const award of plan.race.awardedPrizes) {
+				const attribution = trainerByRacerId[award.racerId];
+				const trainerId = attribution.trainerId;
+				const result = new Record(trainerResultCollection);
+				result.set('race', raceId);
+				result.set('racer', award.racerId);
+				if (trainerId) result.set('trainer', trainerId);
+				result.set('attributionStatus', attribution.status);
+				result.set('position', award.position);
+				result.set('earnings', award.amount);
+				result.set('occurredAt', plan.race.endTime);
+				txApp.save(result);
+				trainerResultFacts.push({
+					resultId: result.id,
+					racerId: award.racerId,
+					trainerId: trainerId || null,
+					attributionStatus: attribution.status,
+					position: award.position,
+					earnings: award.amount
+				});
+				if (trainerId) affectedTrainerIds[trainerId] = true;
+			}
+
+			for (const trainerId of Object.keys(affectedTrainerIds)) {
+				require(`${__hooks}/trainerCareer.cjs`).rebuildTrainerCareer(txApp, trainerId);
+			}
 			require(`${__hooks}/wagerSettlement.cjs`).resolveRaceWagers(txApp, {
 				raceId,
 				outcome: 'settled',
@@ -276,7 +325,8 @@ routerAdd(
 				raceId,
 				winnerId: plan.race.winner,
 				finishingOrder: plan.race.finishingOrder,
-				awardedPrizes: plan.race.awardedPrizes
+				awardedPrizes: plan.race.awardedPrizes,
+				trainerResults: trainerResultFacts
 			});
 			txApp.save(settlementEvent);
 			settled = true;
