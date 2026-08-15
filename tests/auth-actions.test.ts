@@ -13,13 +13,14 @@ function requestWith(fields: Record<string, string>): Request {
 test('registration creates a user with defaults and signs the new player in', async () => {
 	const calls: Array<{ method: string; value: unknown }> = [];
 	const users = {
-		create: async (value: unknown) => calls.push({ method: 'create', value }),
 		authWithPassword: async (email: string, password: string) =>
 			calls.push({ method: 'authWithPassword', value: { email, password } })
 	};
 	const locals = {
 		pb: {
 			authStore: { isValid: true },
+			send: async (path: string, options: unknown) =>
+				calls.push({ method: 'send', value: { path, options } }),
 			collection: (name: string) => {
 				assert.equal(name, 'users');
 				return users;
@@ -43,15 +44,21 @@ test('registration creates a user with defaults and signs the new player in', as
 
 	assert.deepEqual(calls, [
 		{
-			method: 'create',
+			method: 'send',
 			value: {
-				email: 'newplayer@example.com',
-				password: 'password123',
-				passwordConfirm: 'password123',
+				path: '/api/prl/accounts/register',
 				options: {
-					raceViewer: { leaderboardMode: 'interval', isViewing: false }
-				},
-				watchlist: []
+					method: 'POST',
+					body: {
+						email: 'newplayer@example.com',
+						password: 'password123',
+						passwordConfirm: 'password123',
+						options: {
+							raceViewer: { leaderboardMode: 'interval', isViewing: false }
+						},
+						watchlist: []
+					}
+				}
 			}
 		},
 		{
@@ -125,14 +132,12 @@ test('registration reports a duplicate account as a useful form error', async ()
 		}),
 		locals: {
 			pb: {
-				collection: () => ({
-					create: async () => {
-						throw {
-							status: 400,
-							response: { data: { email: { code: 'validation_not_unique' } } }
-						};
-					}
-				})
+				send: async () => {
+					throw {
+						status: 400,
+						response: { data: { email: { code: 'validation_not_unique' } } }
+					};
+				}
 			}
 		}
 	} as never);
@@ -154,11 +159,9 @@ test('registration reports backend failures without exposing internal errors', a
 		}),
 		locals: {
 			pb: {
-				collection: () => ({
-					create: async () => {
-						throw new Error('database connection details');
-					}
-				})
+				send: async () => {
+					throw new Error('database connection details');
+				}
 			}
 		}
 	} as never);
@@ -180,8 +183,8 @@ test('registration explains when the account was created but automatic sign-in f
 		}),
 		locals: {
 			pb: {
+				send: async () => undefined,
 				collection: () => ({
-					create: async () => undefined,
 					authWithPassword: async () => {
 						throw new Error('connection details');
 					}

@@ -64,14 +64,17 @@ export const actions = {
 		}
 
 		try {
-			await locals.pb.collection('users').create({
-				email,
-				password,
-				passwordConfirm,
-				options: {
-					raceViewer: { leaderboardMode: 'interval', isViewing: false }
-				},
-				watchlist: []
+			await locals.pb.send('/api/prl/accounts/register', {
+				method: 'POST',
+				body: {
+					email,
+					password,
+					passwordConfirm,
+					options: {
+						raceViewer: { leaderboardMode: 'interval', isViewing: false }
+					},
+					watchlist: []
+				}
 			});
 		} catch (error) {
 			if (isDuplicateEmail(error)) {

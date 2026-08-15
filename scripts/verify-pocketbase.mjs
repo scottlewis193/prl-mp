@@ -17,7 +17,9 @@ assert(
 );
 
 const expectedCollections = [
+	'accountLedger',
 	'events',
+	'holdings',
 	'leagues',
 	'pokemon',
 	'racers',
@@ -141,16 +143,23 @@ try {
 
 	const normalEmail = `schema-test-${Date.now()}@example.com`;
 	const normalPassword = 'schema-test-password';
-	const normalUser = await adminPb.collection('users').create({
-		email: normalEmail,
-		password: normalPassword,
-		passwordConfirm: normalPassword,
-		verified: true
+	const normalUser = await adminPb.send('/api/prl/accounts/register', {
+		method: 'POST',
+		body: {
+			email: normalEmail,
+			password: normalPassword,
+			passwordConfirm: normalPassword
+		}
 	});
 	cleanup.push(() => adminPb.collection('users').delete(normalUser.id));
 
 	const normalPb = new PocketBase(baseUrl);
 	await normalPb.collection('users').authWithPassword(normalEmail, normalPassword);
+	assert.equal(normalPb.authStore.record.balance, 10_000);
+	assert.deepEqual(
+		(await normalPb.collection('accountLedger').getFullList()).map((entry) => entry.type),
+		['account_opened']
+	);
 	await assert.rejects(
 		normalPb.collection('leagues').create({
 			name: 'Unauthorized League',
