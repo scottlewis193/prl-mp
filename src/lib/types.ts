@@ -1,6 +1,7 @@
 import type { Sprite, Texture } from 'pixi.js';
 import type { AuthRecord } from 'pocketbase';
 import type { CameraMode, LeaderboardMode, Theme } from './settingsPreferences';
+import type { SpeciesAssetState, SpeciesProvenance } from '$lib/species';
 
 export type AwardedPrize = { racerId: string; position: number; amount: number };
 
@@ -280,7 +281,9 @@ export type SortedRacer = Racer & { progress: number; totalProgress: number; has
 
 export type PokemonType = {
 	id?: string;
+	pokedexNumber: number;
 	name: string;
+	generation: number;
 	mugshot: string;
 	spriteSheet: string;
 	animData: any;
@@ -296,6 +299,8 @@ export type PokemonType = {
 	moves: any[];
 
 	types: string[];
+	provenance: SpeciesProvenance;
+	assetState: SpeciesAssetState;
 	hp: number;
 	attack: number;
 	defense: number;
@@ -306,7 +311,9 @@ export type PokemonType = {
 
 export class Pokemon implements PokemonType {
 	id?: string = '0';
+	pokedexNumber: number = 0;
 	name: string = '';
+	generation: number = 0;
 	mugshot: string = '';
 	spriteSheet: string = '';
 	animData: any = {};
@@ -329,6 +336,12 @@ export class Pokemon implements PokemonType {
 	};
 	moves: any[] = [];
 	types: string[] = [];
+	provenance = { source: '', version: '', url: '' };
+	assetState: PokemonType['assetState'] = {
+		portrait: 'fallback',
+		walkAnimation: 'fallback',
+		fallbackSpecies: 'pikachu'
+	};
 	hp: number = 0;
 	attack: number = 0;
 	defense: number = 0;

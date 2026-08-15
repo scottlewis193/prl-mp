@@ -3,6 +3,7 @@ import 'dotenv/config';
 import assert from 'node:assert/strict';
 import PocketBase from 'pocketbase';
 import { resolvePocketBaseUrl } from '../src/lib/pocketbase-url.js';
+import { verifySpeciesCollectionSchema } from '../src/lib/server/speciesCatalogueSchema.js';
 
 const baseUrl = resolvePocketBaseUrl(process.env.PUBLIC_PB_URL);
 const userEmail = process.env.PB_USER;
@@ -46,6 +47,15 @@ try {
 		.filter((name) => expectedCollections.includes(name))
 		.sort();
 	assert.deepEqual(collectionNames, expectedCollections);
+	const pokemonCollection = await adminPb.collections.getOne('pokemon');
+	verifySpeciesCollectionSchema(pokemonCollection);
+	const species = await pb.collection('pokemon').getFullList({ batch: 1_000 });
+	assert.equal(species.length, 649, 'Pokemon catalogue must contain exactly 649 records');
+	assert.equal(
+		new Set(species.map(({ pokedexNumber }) => pokedexNumber)).size,
+		649,
+		'Pokemon catalogue must contain 649 unique National Pokédex numbers'
+	);
 
 	const trainer = await pb.collection('trainers').create({
 		name: 'Schema Test Trainer',
@@ -65,18 +75,7 @@ try {
 	});
 	cleanup.push(() => pb.collection('leagues').delete(league.id));
 
-	const pokemon = await pb.collection('pokemon').create({
-		name: `schema-test-${Date.now()}`,
-		animData: {},
-		stats: { hp: 10, attack: 10, defense: 10, speed: 10 },
-		moves: [],
-		types: ['normal'],
-		hp: 10,
-		attack: 10,
-		defense: 10,
-		speed: 10
-	});
-	cleanup.push(() => pb.collection('pokemon').delete(pokemon.id));
+	const pokemon = species[0];
 
 	const racetrack = await pb.collection('racetracks').create({
 		name: 'Schema Test Track',

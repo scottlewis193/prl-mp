@@ -26,3 +26,19 @@ test('uses the bundled portrait for seeded Pokémon with stale PocketBase filena
 
 	assert.equal(getLeaderboardSpriteUrl(pokemon), '/pokemon-sprites/pikachu-portrait.png');
 });
+
+test('uses the declared generic fallback when a catalogued species has no bespoke assets', () => {
+	const pokemon = {
+		name: 'Genesect',
+		overworldImage: '',
+		leaderboardImage: '',
+		assetState: {
+			portrait: 'fallback',
+			walkAnimation: 'fallback',
+			fallbackSpecies: 'pikachu'
+		}
+	} as Pokemon;
+
+	assert.equal(getWalkSpriteUrl(pokemon), '/pokemon-sprites/pikachu-walk.png');
+	assert.equal(getLeaderboardSpriteUrl(pokemon), '/pokemon-sprites/pikachu-portrait.png');
+});

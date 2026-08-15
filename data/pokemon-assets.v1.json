@@ -1,0 +1,28 @@
+{
+	"schemaVersion": 1,
+	"bundledSpecies": [
+		"bulbasaur",
+		"charmander",
+		"squirtle",
+		"pikachu",
+		"psyduck",
+		"meowth",
+		"growlithe",
+		"eevee"
+	],
+	"fallbackSpecies": "pikachu",
+	"fallbackWalkAnimation": {
+		"AnimData": {
+			"Anims": {
+				"Anim": [
+					{
+						"Name": "Walk",
+						"FrameWidth": 32,
+						"FrameHeight": 40,
+						"Durations": { "Duration": [8, 10, 8, 10] }
+					}
+				]
+			}
+		}
+	}
+}
