@@ -145,9 +145,51 @@ test('migration reconstructs settled awards and freezes only unsettled legacy pr
 			{ racerId: racers[0].id, position: 1, amount: 12 },
 			{ racerId: racers[1].id, position: 2, amount: 5 }
 		]);
+		const migratedTrainerResults = await client.collection('trainerRaceResults').getFullList({
+			filter: `race = "${settledRaceId}"`,
+			sort: 'position'
+		});
+		assert.deepEqual(
+			migratedTrainerResults.map((result) => ({
+				racer: result.racer,
+				trainer: result.trainer,
+				attributionStatus: result.attributionStatus,
+				position: result.position,
+				earnings: result.earnings
+			})),
+			[
+				{
+					racer: racers[0].id,
+					trainer: '',
+					attributionStatus: 'unknown_legacy',
+					position: 1,
+					earnings: 12
+				},
+				{
+					racer: racers[1].id,
+					trainer: '',
+					attributionStatus: 'unknown_legacy',
+					position: 2,
+					earnings: 5
+				}
+			]
+		);
+		assert.deepEqual((await client.collection('trainers').getOne(racers[0].trainer)).career, {
+			starts: 0,
+			wins: 0,
+			podiums: 0,
+			earnings: 0,
+			championships: 0,
+			recentResults: []
+		});
+		assert.deepEqual(await client.collection('trainerChampionships').getFullList(), []);
 		assert.deepEqual(
 			(await client.collection('races').getOne(pendingRace.id)).prizeCurve,
 			[6, 4, 2]
+		);
+		assert.deepEqual(
+			(await client.collection('racers').getOne(racers[2].id)).currentRace.trainerAtEntry,
+			{ status: 'attributed', trainerId: racers[2].trainer }
 		);
 
 		await client.collection('leagues').update('prlseeddemo0001', { prizeMoneyScaling: 100 });

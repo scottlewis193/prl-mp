@@ -3,6 +3,7 @@ import type { AuthRecord } from 'pocketbase';
 import type { CameraMode, LeaderboardMode, Theme } from './settingsPreferences';
 import type { SpeciesAssetState, SpeciesProvenance } from '$lib/species';
 import type { RaceFormat } from './raceFormat';
+import { createEmptyTrainerCareer } from './trainerCareer';
 
 export type { RaceFormat } from './raceFormat';
 
@@ -92,6 +93,7 @@ type RacerType = {
 		lapTimes: { [lapNumber: number]: number };
 		bestLapTime?: number;
 		trackContext?: TrackSimulationContext;
+		trainerAtEntry?: TrainerAtRaceEntry;
 	};
 	// --- 🏁 Career Performance ---
 	raceHistory: {
@@ -212,6 +214,7 @@ export class Racer implements RacerType {
 		lapTimes: { [lapNumber: number]: number };
 		bestLapTime?: number;
 		trackContext?: TrackSimulationContext;
+		trainerAtEntry?: TrainerAtRaceEntry;
 	} = $state({
 		lapsCompleted: 0,
 		checkpointIndex: 0,
@@ -364,6 +367,61 @@ export type TrainerType = {
 	tactics: number;
 	bond: number;
 	gender: 'male' | 'female';
+	career: TrainerCareer;
+};
+
+export type TrainerRecentResult = {
+	resultId: string;
+	raceId: string;
+	racerId: string;
+	position: number;
+	earnings: number;
+	occurredAt: string;
+};
+
+export type TrainerCareer = {
+	starts: number;
+	wins: number;
+	podiums: number;
+	earnings: number;
+	championships: number;
+	recentResults: TrainerRecentResult[];
+};
+
+export type TrainerRaceResultFact = {
+	id: string;
+	raceId: string;
+	racerId: string;
+	trainerId?: string;
+	position: number;
+	earnings: number;
+	occurredAt: string;
+	attributionStatus?: TrainerAttributionStatus;
+};
+
+export type TrainerAttributionStatus = 'attributed' | 'untrained' | 'unknown_legacy';
+
+export type TrainerAtRaceEntry = {
+	status: Exclude<TrainerAttributionStatus, 'unknown_legacy'>;
+	trainerId?: string;
+};
+
+export type TrainerChampionshipFact = {
+	id: string;
+	trainerId: string;
+	occurredAt: string;
+};
+
+export type TrainerRaceResult = {
+	id: string;
+	race: string;
+	racer: string;
+	trainer?: string;
+	attributionStatus: TrainerAttributionStatus;
+	position: number;
+	earnings: number;
+	occurredAt: string;
+	expand?: { race?: Race; racer?: Racer; trainer?: Trainer };
 };
 
 export class Trainer implements TrainerType {
@@ -373,6 +431,7 @@ export class Trainer implements TrainerType {
 	tactics: number = $state(1);
 	bond: number = $state(1);
 	gender: 'male' | 'female' = $state('male');
+	career: TrainerCareer = $state(createEmptyTrainerCareer());
 }
 
 export type RaceTrackType = {

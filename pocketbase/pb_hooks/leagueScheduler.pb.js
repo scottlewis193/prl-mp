@@ -46,6 +46,19 @@ routerAdd(
 				Array.from({ length: places }, (_, index) => (places - index) * safeScale)
 			);
 		};
+		const snapshotTrainerEntry = (racer) => {
+			let currentRace = {};
+			try {
+				currentRace = JSON.parse(toString(racer.get('currentRace'))) || {};
+			} catch {
+				currentRace = {};
+			}
+			const trainerId = racer.getString('trainer');
+			currentRace.trainerAtEntry = trainerId
+				? { status: 'attributed', trainerId }
+				: { status: 'untrained' };
+			racer.set('currentRace', currentRace);
+		};
 
 		const body = e.requestInfo().body || {};
 		const nowMs = body.now === undefined ? Date.now() : Date.parse(body.now);
@@ -156,6 +169,7 @@ routerAdd(
 								const backfill = takeAvailableRacers(league.id, capacity - scheduledRacers.length);
 								for (const racer of backfill) {
 									racer.set('race', race.id);
+									snapshotTrainerEntry(racer);
 									txApp.save(racer);
 									scheduledRacers.push(racer);
 									result.assignedRacers += 1;
@@ -194,7 +208,8 @@ routerAdd(
 										finishedAt: '',
 										lapStartTime: 0,
 										lapTimes: {},
-										bestLapTime: 0
+										bestLapTime: 0,
+										trainerAtEntry: {}
 									});
 									racer.unmarshalJSONField('currentRace', currentRace);
 									currentRace.lapsCompleted = 0;
@@ -302,6 +317,7 @@ routerAdd(
 
 						for (const racer of selected) {
 							racer.set('race', race.id);
+							snapshotTrainerEntry(racer);
 							txApp.save(racer);
 							result.assignedRacers += 1;
 						}

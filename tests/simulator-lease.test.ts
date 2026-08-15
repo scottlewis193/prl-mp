@@ -64,6 +64,12 @@ async function settle(client: PocketBase, raceId: string) {
 	}) as Promise<{ settled: boolean }>;
 }
 
+async function rebuildTrainerCareers(client: PocketBase) {
+	return client.send('/api/prl/trainers/rebuild-careers', {
+		method: 'POST'
+	}) as Promise<{ rebuilt: number }>;
+}
+
 async function reconcileSchedule(
 	client: PocketBase,
 	now: string,
@@ -295,6 +301,8 @@ test('rolls back every settlement effect when the durable event write fails', as
 	const before = JSON.stringify({
 		race: await firstWorker.collection('races').getOne(raceId),
 		racers: await firstWorker.collection('racers').getFullList({ sort: 'id' }),
+		trainers: await firstWorker.collection('trainers').getFullList({ sort: 'id' }),
+		trainerResults: await firstWorker.collection('trainerRaceResults').getFullList({ sort: 'id' }),
 		events: await firstWorker.collection('events').getFullList({ sort: 'id' })
 	});
 
@@ -307,6 +315,10 @@ test('rolls back every settlement effect when the durable event write fails', as
 		JSON.stringify({
 			race: await firstWorker.collection('races').getOne(raceId),
 			racers: await firstWorker.collection('racers').getFullList({ sort: 'id' }),
+			trainers: await firstWorker.collection('trainers').getFullList({ sort: 'id' }),
+			trainerResults: await firstWorker
+				.collection('trainerRaceResults')
+				.getFullList({ sort: 'id' }),
 			events: await firstWorker.collection('events').getFullList({ sort: 'id' })
 		}),
 		before
@@ -321,6 +333,21 @@ test('settles a finished race atomically and remains unchanged when settlement i
 		filter: `race = "${raceId}"`,
 		sort: 'id'
 	});
+	const rosterMovedRacer = racers[0];
+	const explicitlyUntrainedRacer = racers[1];
+	const entryTrainerId = rosterMovedRacer.currentRace.trainerAtEntry.trainerId as string;
+	const untrainedOriginalTrainerId = explicitlyUntrainedRacer.trainer as string;
+	await firstWorker.collection('racers').update(rosterMovedRacer.id, {
+		trainer: racers[2].trainer
+	});
+	await firstWorker.collection('racers').update(explicitlyUntrainedRacer.id, {
+		trainer: null,
+		currentRace: {
+			...explicitlyUntrainedRacer.currentRace,
+			trainerAtEntry: { status: 'untrained' }
+		}
+	});
+	explicitlyUntrainedRacer.currentRace.trainerAtEntry = { status: 'untrained' };
 	const balanceBeforeWagers = firstWorker.authStore.record?.balance as number;
 	const bettingCutoff = new Date(Date.now() + 60_000).toISOString();
 	await firstWorker.collection('races').update(raceId, {
@@ -418,12 +445,68 @@ test('settles a finished race atomically and remains unchanged when settlement i
 		filter: `idempotencyKey = "race-settled:${raceId}"`
 	});
 	assert.equal(settlementEvents.length, 1);
-	assert.deepEqual(settlementEvents[0].facts, {
-		raceId,
-		winnerId: racers.at(-1)?.id,
-		finishingOrder: [...racers].reverse().map((racer) => racer.id),
-		awardedPrizes: settledRace.awardedPrizes
+	assert.deepEqual(
+		{
+			raceId: settlementEvents[0].facts.raceId,
+			winnerId: settlementEvents[0].facts.winnerId,
+			finishingOrder: settlementEvents[0].facts.finishingOrder,
+			awardedPrizes: settlementEvents[0].facts.awardedPrizes
+		},
+		{
+			raceId,
+			winnerId: racers.at(-1)?.id,
+			finishingOrder: [...racers].reverse().map((racer) => racer.id),
+			awardedPrizes: settledRace.awardedPrizes
+		}
+	);
+	const trainerResults = await firstWorker.collection('trainerRaceResults').getFullList({
+		filter: `race = "${raceId}"`,
+		sort: 'position'
 	});
+	assert.equal(trainerResults.length, racers.length);
+	const rosterMovedResult = trainerResults.find((result) => result.racer === rosterMovedRacer.id);
+	assert.equal(rosterMovedResult?.trainer, entryTrainerId);
+	assert.equal(rosterMovedResult?.attributionStatus, 'attributed');
+	const untrainedResult = trainerResults.find(
+		(result) => result.racer === explicitlyUntrainedRacer.id
+	);
+	assert.equal(untrainedResult?.trainer, '');
+	assert.equal(untrainedResult?.attributionStatus, 'untrained');
+	assert.deepEqual(
+		settlementEvents[0].facts.trainerResults.map(
+			(result: {
+				racerId: string;
+				trainerId: string | null;
+				attributionStatus: string;
+				position: number;
+				earnings: number;
+			}) => ({
+				racerId: result.racerId,
+				trainerId: result.trainerId,
+				attributionStatus: result.attributionStatus,
+				position: result.position,
+				earnings: result.earnings
+			})
+		),
+		trainerResults.map((result) => ({
+			racerId: result.racer,
+			trainerId: result.trainer || null,
+			attributionStatus: result.attributionStatus,
+			position: result.position,
+			earnings: result.earnings
+		}))
+	);
+	const trainerCareers = await firstWorker.collection('trainers').getFullList();
+	assert.equal(
+		trainerCareers.reduce((starts, trainer) => starts + trainer.career.starts, 0),
+		racers.length - 1
+	);
+	assert.equal(
+		trainerCareers.reduce((earnings, trainer) => earnings + trainer.career.earnings, 0),
+		trainerResults
+			.filter((result) => result.trainer)
+			.reduce((earnings, result) => earnings + result.earnings, 0)
+	);
 	const settledWagers = await firstWorker.collection('wagers').getFullList({ sort: 'selection' });
 	assert.deepEqual(
 		settledWagers.map((wager) => ({
@@ -463,6 +546,8 @@ test('settles a finished race atomically and remains unchanged when settlement i
 		racers: settledRacers,
 		wagers: settledWagers,
 		events: settlementEvents,
+		trainerResults,
+		trainerCareers,
 		balance: refreshedAfterPayout.record.balance
 	});
 	assert.deepEqual(await settle(secondWorker, raceId), { settled: false });
@@ -473,10 +558,37 @@ test('settles a finished race atomically and remains unchanged when settlement i
 			events: await secondWorker.collection('events').getFullList({
 				filter: `idempotencyKey = "race-settled:${raceId}"`
 			}),
+			trainerResults: await secondWorker.collection('trainerRaceResults').getFullList({
+				filter: `race = "${raceId}"`,
+				sort: 'position'
+			}),
+			trainerCareers: await secondWorker.collection('trainers').getFullList(),
 			balance: (await secondWorker.collection('users').authRefresh()).record.balance
 		}),
 		beforeRetry
 	);
+	const projectedTrainer = trainerCareers.find((trainer) => trainer.career.starts === 1);
+	assert.ok(projectedTrainer);
+	await firstWorker.collection('trainers').update(projectedTrainer.id, {
+		career: { starts: 999, wins: 999, podiums: 999, earnings: 999, championships: 999 }
+	});
+	await firstWorker.collection('trainerChampionships').create({
+		trainer: projectedTrainer.id,
+		championshipKey: 'test-season-1',
+		name: 'Test Season Championship',
+		occurredAt: '2026-08-15T12:00:00.000Z'
+	});
+	assert.deepEqual(await rebuildTrainerCareers(firstWorker), { rebuilt: trainerCareers.length });
+	assert.deepEqual((await firstWorker.collection('trainers').getOne(projectedTrainer.id)).career, {
+		...projectedTrainer.career,
+		championships: 1
+	});
+	await firstWorker.collection('racers').update(rosterMovedRacer.id, {
+		trainer: entryTrainerId
+	});
+	await firstWorker.collection('racers').update(explicitlyUntrainedRacer.id, {
+		trainer: untrainedOriginalTrainerId
+	});
 	await firstWorker.collection('leagues').update('prlseeddemo0001', { prizeMoneyScaling: 1 });
 });
 
@@ -615,6 +727,9 @@ test('maintains the configured event pipeline without duplicate or overlapping a
 	await firstWorker.collection('racers').update(ineligibleRacer.id, {
 		status: { ...ineligibleRacer.status, injured: true }
 	});
+	const entryUntrainedRacer = await firstWorker.collection('racers').getOne('prlseedracer002');
+	const entryUntrainedOriginalTrainer = entryUntrainedRacer.trainer;
+	await firstWorker.collection('racers').update(entryUntrainedRacer.id, { trainer: null });
 
 	const firstRun = await reconcileSchedule(firstWorker, '2026-08-14T12:05:00.000Z');
 	assert.deepEqual(firstRun, {
@@ -638,6 +753,13 @@ test('maintains the configured event pipeline without duplicate or overlapping a
 		sort: 'startTime'
 	});
 	const racers = await firstWorker.collection('racers').getFullList();
+	assert.deepEqual(
+		racers.find((racer) => racer.id === entryUntrainedRacer.id)?.currentRace.trainerAtEntry,
+		{ status: 'untrained' }
+	);
+	await firstWorker.collection('racers').update(entryUntrainedRacer.id, {
+		trainer: entryUntrainedOriginalTrainer
+	});
 
 	assert.equal(events.length, 2);
 	assert.equal(new Set(events.map((event) => event.scheduleKey)).size, 2);
@@ -728,6 +850,17 @@ test('reconciles countdown and running transitions at scheduled times after a re
 	assert.equal(runningRace.status, 'running');
 	assert.equal(new Date(runningRace.startTime).toISOString(), '2026-08-14T13:00:00.000Z');
 	assert.equal(event.started, true);
+	const runningEntrants = await firstWorker.collection('racers').getFullList({
+		filter: `race = "${scheduledRace.id}"`
+	});
+	assert.equal(
+		runningEntrants.every(
+			(racer) =>
+				racer.currentRace.trainerAtEntry.status === 'attributed' &&
+				racer.currentRace.trainerAtEntry.trainerId === racer.trainer
+		),
+		true
+	);
 
 	const restartRun = await reconcileSchedule(secondWorker, '2026-08-14T13:01:00.000Z', {
 		futureEventCount: 1
