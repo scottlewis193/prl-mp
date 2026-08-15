@@ -1,28 +1,21 @@
 import assert from 'node:assert/strict';
-import { execFile, spawn, type ChildProcess } from 'node:child_process';
-import { once } from 'node:events';
+import { execFile } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import test from 'node:test';
 import { promisify } from 'node:util';
 
 import { NodePocketBase } from './support/node-pocketbase';
+import {
+	projectDirectory,
+	startPocketBase,
+	stopPocketBase,
+	testSuperuserEmail,
+	testSuperuserPassword
+} from './support/pocketbase-test-server';
 
-const projectDirectory = resolve(import.meta.dirname, '..');
 const execFileAsync = promisify(execFile);
-
-async function waitForPocketBase(url: string): Promise<void> {
-	for (let attempt = 0; attempt < 100; attempt++) {
-		try {
-			if ((await fetch(`${url}/api/health`)).ok) return;
-		} catch {
-			// PocketBase is still starting.
-		}
-		await new Promise((resolveWait) => setTimeout(resolveWait, 25));
-	}
-	throw new Error('Timed out waiting for the PocketBase test server');
-}
 
 test('migration imports one complete offline Generation I–V catalogue', async () => {
 	const dataDirectory = await mkdtemp(join(tmpdir(), 'prl-species-catalogue-'));
@@ -30,33 +23,16 @@ test('migration imports one complete offline Generation I–V catalogue', async 
 	const baseUrl = `http://127.0.0.1:${port}`;
 	const serviceEmail = 'species-catalogue@example.com';
 	const servicePassword = 'species-catalogue-password';
-	const superuserEmail = 'species-superuser@example.com';
-	const superuserPassword = 'species-superuser-password';
-	const server: ChildProcess = spawn(
-		join(projectDirectory, 'pocketbase', 'pocketbase'),
-		[
-			'serve',
-			`--http=127.0.0.1:${port}`,
-			`--dir=${dataDirectory}`,
-			`--migrationsDir=${join(projectDirectory, 'pocketbase', 'pb_migrations')}`,
-			`--hooksDir=${join(projectDirectory, 'pocketbase', 'pb_hooks')}`,
-			'--hooksWatch=false'
-		],
-		{
-			cwd: projectDirectory,
-			env: {
-				...process.env,
-				PB_USER: serviceEmail,
-				PB_PASS: servicePassword,
-				PB_SUPERUSER_EMAIL: superuserEmail,
-				PB_SUPERUSER_PASS: superuserPassword
-			} as unknown as NodeJS.ProcessEnv,
-			stdio: 'ignore'
-		}
-	);
+	const server = await startPocketBase({
+		baseUrl,
+		port,
+		dataDirectory,
+		migrationsDirectory: join(projectDirectory, 'pocketbase', 'pb_migrations'),
+		serviceEmail,
+		servicePassword
+	});
 
 	try {
-		await waitForPocketBase(baseUrl);
 		const client = new NodePocketBase(baseUrl);
 		client.autoCancellation(false);
 		await client.collection('users').authWithPassword(serviceEmail, servicePassword);
@@ -133,16 +109,13 @@ test('migration imports one complete offline Generation I–V catalogue', async 
 				PUBLIC_PB_URL: baseUrl,
 				PB_USER: serviceEmail,
 				PB_PASS: servicePassword,
-				PB_SUPERUSER_EMAIL: superuserEmail,
-				PB_SUPERUSER_PASS: superuserPassword
+				PB_SUPERUSER_EMAIL: testSuperuserEmail,
+				PB_SUPERUSER_PASS: testSuperuserPassword
 			} as unknown as NodeJS.ProcessEnv
 		});
 		assert.match(schemaResult.stdout, /PocketBase schema verified:/);
 	} finally {
-		if (server.exitCode === null) {
-			server.kill('SIGTERM');
-			await once(server, 'exit');
-		}
+		await stopPocketBase(server);
 		await rm(dataDirectory, { recursive: true, force: true });
 	}
 });

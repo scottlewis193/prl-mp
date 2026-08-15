@@ -10,7 +10,9 @@ routerAdd(
 			balance,
 			stake: wager.getFloat('stake'),
 			odds: wager.getFloat('odds'),
-			potentialPayout: wager.getFloat('potentialPayout')
+			potentialPayout: wager.getFloat('potentialPayout'),
+			cutoffAt: wager.getDateTime('cutoffAt').string(),
+			cutoffSnapshotStatus: wager.getString('cutoffSnapshotStatus')
 		});
 		const body = e.requestInfo().body || {};
 		const raceId = String(body.raceId || '').trim();
@@ -46,8 +48,12 @@ routerAdd(
 				) {
 					throw e.badRequestError('The idempotency key was already used for another wager.', {});
 				}
-				const player = txApp.findRecordById('users', e.auth.id);
-				result = wagerResponse(previous, player.getFloat('balance'));
+				const reserve = txApp.findFirstRecordByFilter(
+					'accountLedger',
+					'player = {:playerId} && sourceKey = {:sourceKey}',
+					{ playerId: e.auth.id, sourceKey: `wager:${previous.id}:reserve` }
+				);
+				result = wagerResponse(previous, reserve.getFloat('balanceAfter'));
 				return;
 			}
 
@@ -78,6 +84,9 @@ routerAdd(
 					odds: Number(candidate.odds)
 				}))
 			};
+			if (Date.parse(market.cutoff) !== bettingCutoff) {
+				throw e.badRequestError('The requested market is unavailable.', {});
+			}
 			let quote;
 			try {
 				quote = require(`${__hooks}/wager.cjs`).quoteWager({
@@ -89,6 +98,15 @@ routerAdd(
 			} catch (error) {
 				throw e.badRequestError(error.message, {});
 			}
+			let selectedRacer;
+			try {
+				selectedRacer = txApp.findRecordById('racers', quote.selection);
+			} catch {
+				throw e.badRequestError('The selected racer is not participating in this race.', {});
+			}
+			if (selectedRacer.getString('race') !== race.id) {
+				throw e.badRequestError('The selected racer is not participating in this race.', {});
+			}
 
 			const player = txApp.findRecordById('users', e.auth.id);
 			const balance = require(`${__hooks}/wager.cjs`).roundMoney(player.getFloat('balance'));
@@ -97,6 +115,7 @@ routerAdd(
 			player.set('balance', nextBalance);
 			txApp.save(player);
 
+			const acceptedAt = new Date().toISOString();
 			const wager = new Record(txApp.findCollectionByNameOrId('wagers'));
 			wager.set('player', player.id);
 			wager.set('race', race.id);
@@ -105,22 +124,100 @@ routerAdd(
 			wager.set('stake', quote.stake);
 			wager.set('odds', quote.odds);
 			wager.set('potentialPayout', quote.potentialPayout);
+			wager.set('cutoffAt', quote.cutoffAt);
+			wager.set('cutoffSnapshotStatus', 'accepted');
 			wager.set('status', 'open');
 			wager.set('payout', 0);
 			wager.set('idempotencyKey', idempotencyKey);
-			wager.set('placedAt', new Date().toISOString());
+			wager.set('placedAt', acceptedAt);
 			txApp.save(wager);
 
 			require(`${__hooks}/wagerSettlement.cjs`).recordWagerLedgerEntry(txApp, {
 				playerId: player.id,
 				wagerId: wager.id,
-				type: 'wager_reserve',
+				eventKind: 'reserve',
 				balanceDelta: -quote.stake,
 				balanceAfter: nextBalance,
 				odds: quote.odds,
-				occurredAt: new Date().toISOString()
+				occurredAt: acceptedAt
 			});
 			result = wagerResponse(wager, nextBalance);
+		});
+
+		return e.json(200, result);
+	},
+	$apis.requireAuth('users')
+);
+
+routerAdd(
+	'GET',
+	'/api/prl/wagers/account',
+	(e) => {
+		const roundMoney = require(`${__hooks}/wager.cjs`).roundMoney;
+		const findAllInSnapshot = (txApp, collection, filter, sort, params) => {
+			const pageSize = 1000;
+			const records = [];
+			for (let offset = 0; ; offset += pageSize) {
+				const page = txApp.findRecordsByFilter(collection, filter, sort, pageSize, offset, params);
+				records.push(...page);
+				if (page.length < pageSize) return records;
+			}
+		};
+		let result;
+		e.app.runInTransaction((txApp) => {
+			const player = txApp.findRecordById('users', e.auth.id);
+			const ledger = findAllInSnapshot(
+				txApp,
+				'accountLedger',
+				'player = {:playerId}',
+				'occurredAt,id',
+				{ playerId: e.auth.id }
+			);
+			const wagers = findAllInSnapshot(txApp, 'wagers', 'player = {:playerId}', '-placedAt,-id', {
+				playerId: e.auth.id
+			});
+			const raceNameById = {};
+			const selectionNameById = {};
+			const projectedWagers = wagers.map((wager) => {
+				const raceId = wager.getString('race');
+				const selectionId = wager.getString('selection');
+				if (raceNameById[raceId] === undefined) {
+					raceNameById[raceId] = txApp.findRecordById('races', raceId).getString('name');
+				}
+				if (selectionNameById[selectionId] === undefined) {
+					selectionNameById[selectionId] = txApp
+						.findRecordById('racers', selectionId)
+						.getString('name');
+				}
+				return {
+					id: wager.id,
+					raceId,
+					raceName: raceNameById[raceId],
+					market: wager.getString('market'),
+					selection: selectionId,
+					selectionName: selectionNameById[selectionId],
+					stake: wager.getFloat('stake'),
+					odds: wager.getFloat('odds'),
+					potentialPayout: wager.getFloat('potentialPayout'),
+					cutoffAt: wager.getDateTime('cutoffAt').string(),
+					cutoffSnapshotStatus: wager.getString('cutoffSnapshotStatus'),
+					placedAt: wager.getDateTime('placedAt').string(),
+					status: wager.getString('status'),
+					payout: wager.getFloat('payout'),
+					resolvedAt: wager.getDateTime('resolvedAt').string()
+				};
+			});
+			const balance = roundMoney(player.getFloat('balance'));
+			const ledgerBalance = roundMoney(
+				ledger.reduce((total, entry) => total + entry.getFloat('balanceDelta'), 0)
+			);
+			result = {
+				balance,
+				ledgerBalance,
+				reconciled: balance === ledgerBalance,
+				openWagers: projectedWagers.filter((wager) => wager.status === 'open'),
+				historicalWagers: projectedWagers.filter((wager) => wager.status !== 'open')
+			};
 		});
 
 		return e.json(200, result);

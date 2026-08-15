@@ -33,6 +33,8 @@ test('wager page shows eligible markets plus open and historical player wagers',
 			props: {
 				data: {
 					balance: 125,
+					ledgerBalance: 125,
+					reconciled: true,
 					requestId: 'request-1',
 					racers: [
 						{ id: 'racer-a', name: 'Bolt' },
@@ -57,21 +59,38 @@ test('wager page shows eligible markets plus open and historical player wagers',
 					openWagers: [
 						{
 							id: 'wager-open',
+							raceId: 'race-1',
+							raceName: 'Premier Cup',
+							market: 'winner',
+							selection: 'racer-a',
+							selectionName: 'Bolt',
 							stake: 10,
 							odds: 1.8,
 							potentialPayout: 18,
+							cutoffAt: '2026-08-15 14:00:00.000Z',
+							cutoffSnapshotStatus: 'accepted',
+							placedAt: '2026-08-15 13:00:00.000Z',
 							status: 'open',
-							expand: { race: { name: 'Premier Cup' }, selection: { name: 'Bolt' } }
+							payout: 0,
+							resolvedAt: ''
 						}
 					],
 					historicalWagers: [
 						{
 							id: 'wager-won',
+							raceId: 'race-2',
+							raceName: 'Earlier Cup',
+							market: 'winner',
+							selection: 'racer-b',
+							selectionName: 'Dash',
 							stake: 5,
 							odds: 2.4,
 							payout: 12,
+							cutoffAt: '2026-08-14 14:00:00.000Z',
+							cutoffSnapshotStatus: 'accepted',
+							placedAt: '2026-08-14 13:00:00.000Z',
 							status: 'won',
-							expand: { race: { name: 'Earlier Cup' }, selection: { name: 'Dash' } }
+							resolvedAt: '2026-08-14 15:00:00.000Z'
 						}
 					]
 				}
@@ -88,7 +107,8 @@ test('wager page shows eligible markets plus open and historical player wagers',
 		assert.match(body, /Wager history/i);
 		assert.match(body, /Earlier Cup/);
 		assert.match(body, /Won.*Payout.*₽12/is);
-		assert.match(body, /name="requestId" value="request-1"/);
+		assert.match(body, /Ledger.*₽125.*Reconciled/is);
+		assert.match(body, /name="requestId" value="request-1:race-1:racer-a"/);
 	} finally {
 		await rm(temporaryDirectory, { recursive: true });
 	}

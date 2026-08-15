@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
-import { spawn, type ChildProcess } from 'node:child_process';
-import { once } from 'node:events';
+import type { ChildProcess } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import type PocketBase from 'pocketbase';
 import { Container } from 'pixi.js';
 import type { LeagueScheduleResult } from '../src/lib/leagueSchedule';
@@ -13,8 +12,12 @@ import { createTrackRenderPlan } from '../src/lib/trackRendering';
 import { simulateRacer } from '../src/lib/server/simulateRacer';
 import type { RaceTrack, Racer } from '../src/lib/types';
 import { NodePocketBase } from './support/node-pocketbase';
+import {
+	projectDirectory,
+	startPocketBase,
+	stopPocketBase
+} from './support/pocketbase-test-server';
 
-const projectDirectory = resolve(import.meta.dirname, '..');
 const serviceEmail = 'simulator-test@example.com';
 const servicePassword = 'simulator-test-password';
 
@@ -23,19 +26,6 @@ let server: ChildProcess;
 let baseUrl = '';
 let firstWorker: PocketBase;
 let secondWorker: PocketBase;
-
-async function waitForPocketBase(url: string): Promise<void> {
-	for (let attempt = 0; attempt < 100; attempt++) {
-		try {
-			const response = await fetch(`${url}/api/health`);
-			if (response.ok) return;
-		} catch {
-			// The child process is still starting.
-		}
-		await new Promise((resolveWait) => setTimeout(resolveWait, 25));
-	}
-	throw new Error('Timed out waiting for the PocketBase test server');
-}
 
 async function claim(client: PocketBase, ownerId: string, ttlMs: number) {
 	return client.send('/api/prl/simulator/lease', {
@@ -125,28 +115,14 @@ before(async () => {
 	dataDirectory = await mkdtemp(join(tmpdir(), 'prl-simulator-test-'));
 	const port = 18_000 + Math.floor(Math.random() * 10_000);
 	baseUrl = `http://127.0.0.1:${port}`;
-	server = spawn(
-		join(projectDirectory, 'pocketbase', 'pocketbase'),
-		[
-			'serve',
-			`--http=127.0.0.1:${port}`,
-			`--dir=${dataDirectory}`,
-			`--migrationsDir=${join(projectDirectory, 'pocketbase', 'pb_migrations')}`,
-			`--hooksDir=${join(projectDirectory, 'pocketbase', 'pb_hooks')}`,
-			'--hooksWatch=false'
-		],
-		{
-			cwd: projectDirectory,
-			env: {
-				...process.env,
-				PB_USER: serviceEmail,
-				PB_PASS: servicePassword
-			} as unknown as NodeJS.ProcessEnv,
-			stdio: 'ignore'
-		}
-	);
-
-	await waitForPocketBase(baseUrl);
+	server = await startPocketBase({
+		baseUrl,
+		port,
+		dataDirectory,
+		migrationsDirectory: join(projectDirectory, 'pocketbase', 'pb_migrations'),
+		serviceEmail,
+		servicePassword
+	});
 	firstWorker = new NodePocketBase(baseUrl);
 	secondWorker = new NodePocketBase(baseUrl);
 	firstWorker.autoCancellation(false);
@@ -158,10 +134,7 @@ before(async () => {
 });
 
 after(async () => {
-	if (server && server.exitCode === null) {
-		server.kill('SIGTERM');
-		await once(server, 'exit');
-	}
+	if (server) await stopPocketBase(server);
 	await rm(dataDirectory, { recursive: true, force: true });
 });
 
@@ -521,6 +494,23 @@ test('settles a finished race atomically and remains unchanged when settlement i
 	);
 	const refreshedAfterPayout = await firstWorker.collection('users').authRefresh();
 	assert.equal(refreshedAfterPayout.record.balance, balanceBeforeWagers + 20);
+	const payoutEntries = await firstWorker.collection('accountLedger').getFullList({
+		filter: `wager = "${settledWagers.find((wager) => wager.status === 'won')?.id}" && type = "wager_payout"`
+	});
+	assert.deepEqual(
+		payoutEntries.map((entry) => ({
+			balanceDelta: entry.balanceDelta,
+			reason: entry.reason,
+			sourceKey: entry.sourceKey
+		})),
+		[
+			{
+				balanceDelta: 50,
+				reason: 'winning_wager_paid',
+				sourceKey: `wager:${settledWagers.find((wager) => wager.status === 'won')?.id}:payout`
+			}
+		]
+	);
 	assert.deepEqual(
 		settledRacers.map((racer) => ({
 			position: racer.raceHistory.races.at(-1)?.position,
@@ -566,6 +556,51 @@ test('settles a finished race atomically and remains unchanged when settlement i
 			balance: (await secondWorker.collection('users').authRefresh()).record.balance
 		}),
 		beforeRetry
+	);
+	const cancellationLease = await claim(secondWorker, 'replacement-worker', 5_000);
+	assert.equal(cancellationLease.acquired, true);
+	const beforeRejectedCancellation = JSON.stringify({
+		race: await secondWorker.collection('races').getOne(raceId),
+		wagers: await secondWorker.collection('wagers').getFullList({ sort: 'id' }),
+		ledger: await secondWorker.collection('accountLedger').getFullList({ sort: 'id' }),
+		balance: (await secondWorker.collection('users').authRefresh()).record.balance
+	});
+	await assert.rejects(
+		() =>
+			secondWorker.send('/api/prl/races/void', {
+				method: 'POST',
+				body: { raceId }
+			}),
+		/settled races cannot be voided/i
+	);
+	await assert.rejects(
+		() =>
+			commit(secondWorker, 'replacement-worker', cancellationLease.token as number, [], {
+				id: raceId,
+				status: 'cancelled',
+				endTime: '2026-08-14T12:01:00.000Z'
+			}),
+		/settled races cannot be voided/i
+	);
+	await assert.rejects(
+		() =>
+			commit(secondWorker, 'replacement-worker', cancellationLease.token as number, [], {
+				id: raceId,
+				status: 'running',
+				winner: racers[0].id,
+				endTime: '2026-08-14T12:02:00.000Z',
+				finishingOrder: []
+			}),
+		/terminal races cannot be mutated/i
+	);
+	assert.equal(
+		JSON.stringify({
+			race: await secondWorker.collection('races').getOne(raceId),
+			wagers: await secondWorker.collection('wagers').getFullList({ sort: 'id' }),
+			ledger: await secondWorker.collection('accountLedger').getFullList({ sort: 'id' }),
+			balance: (await secondWorker.collection('users').authRefresh()).record.balance
+		}),
+		beforeRejectedCancellation
 	);
 	const projectedTrainer = trainerCareers.find((trainer) => trainer.career.starts === 1);
 	assert.ok(projectedTrainer);
@@ -716,6 +751,32 @@ test('a cancelled race refunds each reserved stake exactly once', async () => {
 	assert.equal(
 		(await secondWorker.collection('users').authRefresh()).record.balance,
 		balanceBefore
+	);
+	const cancelledSnapshot = JSON.stringify({
+		race: await secondWorker.collection('races').getOne(race.id),
+		wager: await secondWorker.collection('wagers').getOne(refunded.id),
+		ledger: await secondWorker.collection('accountLedger').getFullList({ sort: 'id' }),
+		balance: (await secondWorker.collection('users').authRefresh()).record.balance
+	});
+	await assert.rejects(
+		() =>
+			commit(secondWorker, 'replacement-worker', lease.token as number, [], {
+				id: race.id,
+				status: 'pending',
+				winner: assigned[0].id,
+				endTime: new Date(Date.parse(race.startTime) + 60_000).toISOString(),
+				finishingOrder: [assigned[0].id]
+			}),
+		/terminal races cannot be mutated/i
+	);
+	assert.equal(
+		JSON.stringify({
+			race: await secondWorker.collection('races').getOne(race.id),
+			wager: await secondWorker.collection('wagers').getOne(refunded.id),
+			ledger: await secondWorker.collection('accountLedger').getFullList({ sort: 'id' }),
+			balance: (await secondWorker.collection('users').authRefresh()).record.balance
+		}),
+		cancelledSnapshot
 	);
 	await makeEveryRacerEligible(firstWorker);
 });

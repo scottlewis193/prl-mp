@@ -47,7 +47,8 @@ function quoteWager({ market, selection, stake, now }) {
 		selection,
 		stake: roundMoney(stake),
 		odds: selected.odds,
-		potentialPayout: roundMoney(stake * selected.odds)
+		potentialPayout: roundMoney(stake * selected.odds),
+		cutoffAt: new Date(cutoff).toISOString()
 	};
 }
 

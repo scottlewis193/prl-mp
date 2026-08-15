@@ -235,14 +235,14 @@ routerAdd(
 
 						if (nextStatus !== currentStatus) {
 							if (nextStatus === 'cancelled') {
-								require(`${__hooks}/wagerSettlement.cjs`).resolveRaceWagers(txApp, {
+								require(`${__hooks}/wagerSettlement.cjs`).voidRace(txApp, {
 									raceId: race.id,
-									outcome: 'void',
 									resolvedAt: new Date(nowMs).toISOString()
 								});
+							} else {
+								race.set('status', nextStatus);
+								txApp.save(race);
 							}
-							race.set('status', nextStatus);
-							txApp.save(race);
 							result.transitionedRaces += 1;
 						}
 						if (!['finished', 'cancelled', 'settled'].includes(nextStatus)) allTerminal = false;

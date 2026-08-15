@@ -41,7 +41,8 @@ test('a valid wager quote freezes selection, stake, odds, and potential payout',
 		selection: 'racer-a',
 		stake: 12.34,
 		odds: 2.5,
-		potentialPayout: 30.85
+		potentialPayout: 30.85,
+		cutoffAt: '2026-08-15T14:00:00.000Z'
 	});
 });
 
