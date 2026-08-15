@@ -6,7 +6,12 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type PocketBase from 'pocketbase';
+import { Container } from 'pixi.js';
 import type { LeagueScheduleResult } from '../src/lib/leagueSchedule';
+import { initializeTrackGraphics } from '../src/lib/trackGraphics';
+import { createTrackRenderPlan } from '../src/lib/trackRendering';
+import { simulateRacer } from '../src/lib/server/simulateRacer';
+import type { RaceTrack, Racer } from '../src/lib/types';
 import { NodePocketBase } from './support/node-pocketbase';
 
 const projectDirectory = resolve(import.meta.dirname, '..');
@@ -154,6 +159,52 @@ after(async () => {
 	await rm(dataDirectory, { recursive: true, force: true });
 });
 
+test('migrates both tracks and initializes the Coastal Loop live viewer through shared contracts', async () => {
+	const tracks = await firstWorker.collection('racetracks').getFullList({ sort: 'id' });
+	assert.equal(tracks.length, 2);
+	assert.deepEqual(tracks.map((track) => track.name).sort(), ['Coastal Loop', 'Default Track']);
+	for (const track of tracks) {
+		assert.equal(track.length > 0, true);
+		assert.equal(track.width > 0, true);
+		assert.equal(typeof track.surface, 'string');
+		assert.equal(Array.isArray(track.hazards), true);
+		assert.equal(track.corneringDemand >= 0 && track.corneringDemand <= 1, true);
+		assert.equal(track.speedBias >= -1 && track.speedBias <= 1, true);
+		assert.equal(track.risk >= 0 && track.risk <= 1, true);
+		assert.deepEqual(track.compatibleFormats, ['circuit']);
+		const plan = createTrackRenderPlan(track as never);
+		assert.equal(plan.checkpoints.length >= 2, true);
+		assert.equal(plan.tileCount > 0, true);
+	}
+	const sourceRacer = await firstWorker.collection('racers').getOne('prlseedracer001', {
+		expand: 'pokemon'
+	});
+	for (const track of tracks) {
+		const plan = createTrackRenderPlan(track as never);
+		const racer = JSON.parse(JSON.stringify(sourceRacer)) as Racer;
+		racer.currentRace.lastUpdatedAt = new Date(0).toISOString();
+		const simulated = simulateRacer(racer, track as unknown as RaceTrack, 1_000, 1);
+		assert.equal(Number.isFinite(simulated.x) && Number.isFinite(simulated.y), true);
+		assert.equal(simulated.trackContext.trackId, track.id);
+		assert.equal(simulated.trackContext.incident.trackRisk, track.risk);
+		assert.equal(simulated.trackContext.incident.corneringDemand, track.corneringDemand);
+		assert.deepEqual(simulated.trackContext.incident.hazards, track.hazards);
+		if (track.id === 'prlcoasttrack01') {
+			const viewerTrack = new Container({ label: 'static-track' });
+			const graphics = initializeTrackGraphics(viewerTrack, plan.geometry);
+			const bounds = graphics.getBounds();
+			assert.equal(viewerTrack.getChildByLabel('track-characteristics'), graphics);
+			assert.deepEqual(
+				{ x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
+				{ x: 8, y: 8, width: 176, height: 112 }
+			);
+		}
+	}
+	const originalRace = await firstWorker.collection('races').getOne('prlseedrace0001');
+	assert.equal(originalRace.racetrack, '175hl67e5pvjjib');
+	assert.equal(originalRace.format, 'circuit');
+});
+
 test('excludes concurrent owners and permits recovery after the lease expires', async () => {
 	const [firstClaim, secondClaim] = await Promise.all([
 		claim(firstWorker, 'worker-one', 25),
@@ -167,7 +218,16 @@ test('excludes concurrent owners and permits recovery after the lease expires', 
 
 	assert.equal(recoveredClaim.acquired, true);
 	assert.notEqual(recoveredClaim.token, firstClaim.token ?? secondClaim.token);
-	const racer = await secondWorker.collection('racers').getOne('prlseedracer001');
+	const racer = await secondWorker.collection('racers').getOne('prlseedracer001', {
+		expand: 'pokemon'
+	});
+	const coastalTrack = await secondWorker.collection('racetracks').getOne('prlcoasttrack01');
+	const coastalSimulation = simulateRacer(
+		JSON.parse(JSON.stringify(racer)) as Racer,
+		coastalTrack as unknown as RaceTrack,
+		1_000,
+		1
+	);
 	const staleUpdate = {
 		id: racer.id,
 		currentRace: { ...racer.currentRace, distanceFromCheckpoint: 111 },
@@ -187,7 +247,11 @@ test('excludes concurrent owners and permits recovery after the lease expires', 
 	);
 	const currentUpdate = {
 		...staleUpdate,
-		currentRace: { ...racer.currentRace, distanceFromCheckpoint: 222 },
+		currentRace: {
+			...racer.currentRace,
+			distanceFromCheckpoint: 222,
+			trackContext: coastalSimulation.trackContext
+		},
 		positioning: { ...racer.positioning, x: 222 }
 	};
 	assert.equal(
@@ -200,6 +264,7 @@ test('excludes concurrent owners and permits recovery after the lease expires', 
 	);
 	const persistedRacer = await secondWorker.collection('racers').getOne(racer.id);
 	assert.equal(persistedRacer.currentRace.distanceFromCheckpoint, 222);
+	assert.deepEqual(persistedRacer.currentRace.trackContext, coastalSimulation.trackContext);
 	assert.equal(persistedRacer.positioning.x, 222);
 });
 
@@ -581,6 +646,11 @@ test('maintains the configured event pipeline without duplicate or overlapping a
 		['2026-08-14T13:00:00.000Z', '2026-08-14T14:00:00.000Z']
 	);
 	assert.equal(races.length, 2);
+	assert.equal(new Set(races.map((race) => race.racetrack)).size, 2);
+	assert.equal(
+		races.every((race) => race.format === 'circuit'),
+		true
+	);
 	assert.equal(
 		races.every(
 			(race) =>

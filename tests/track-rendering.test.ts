@@ -11,9 +11,16 @@ function track(data: RaceTrackType['data']): RaceTrackType {
 		checkpoints: [],
 		data,
 		tileset: '',
+		length: 0,
 		totalLength: 0,
 		width: 0,
-		maxSize: { x: 0, y: 0 }
+		maxSize: { x: 0, y: 0 },
+		surface: 'asphalt',
+		hazards: [],
+		corneringDemand: 0,
+		speedBias: 0,
+		risk: 0,
+		compatibleFormats: ['circuit']
 	};
 }
 
@@ -141,6 +148,32 @@ test('uses selected track checkpoints when the Tiled map has no checkpoint layer
 	];
 
 	assert.deepEqual(createTrackRenderPlan(configuredTrack).checkpoints, configuredTrack.checkpoints);
+});
+
+test('creates generic stable geometry for the selected track and its hazards', () => {
+	const configuredTrack = track({
+		width: 1,
+		height: 1,
+		tilewidth: 16,
+		tileheight: 16,
+		tilesets: [{ firstgid: 1, image: '/track.png', tilewidth: 16, tileheight: 16, columns: 1 }],
+		layers: [{ name: 'Ground', type: 'tilelayer', width: 1, height: 1, data: [1] }]
+	});
+	configuredTrack.width = 48;
+	configuredTrack.surface = 'sand';
+	configuredTrack.checkpoints = [
+		{ index: 0, x: 8, y: 8 },
+		{ index: 1, x: 40, y: 8 },
+		{ index: 2, x: 40, y: 40 }
+	];
+	configuredTrack.hazards = [{ type: 'crosswind', severity: 0.6, checkpointIndex: 2 }];
+
+	assert.deepEqual(createTrackRenderPlan(configuredTrack).geometry, {
+		centerline: configuredTrack.checkpoints,
+		width: 48,
+		surface: 'sand',
+		hazards: [{ type: 'crosswind', severity: 0.6, x: 40, y: 40 }]
+	});
 });
 
 test('preserves configured Tiled tile flips and diagonal rotation', () => {

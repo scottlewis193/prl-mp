@@ -141,6 +141,45 @@ test('completed race detail names the winner and displays finishing results', as
 	}
 });
 
+test('race detail identifies the second track and its racing characteristics', async () => {
+	const { component, cleanup } = await serverComponent('RaceDetail');
+	try {
+		const coastalTrack = {
+			id: 'coastal-loop',
+			name: 'Coastal Loop',
+			length: 1_600,
+			totalLength: 1_600,
+			width: 48,
+			surface: 'sand',
+			hazards: [{ type: 'crosswind', severity: 0.6, checkpointIndex: 2 }],
+			corneringDemand: 0.7,
+			speedBias: -0.25,
+			risk: 0.4,
+			compatibleFormats: ['circuit']
+		};
+		const race = {
+			...baseRace,
+			id: 'coastal-result',
+			status: 'settled',
+			racetrack: coastalTrack.id,
+			startTime: '2026-08-15T12:00:00Z'
+		};
+		const body = render(component, { props: { race, racers, racetrack: coastalTrack } }).body;
+
+		assert.match(body, /Coastal Loop/);
+		assert.match(body, /Sand/);
+		assert.match(body, /1,600 px/);
+		assert.match(body, /48 px/);
+		assert.match(body, /Crosswind/);
+		assert.match(body, /Circuit/);
+		assert.match(body, /Cornering demand[\s\S]*70%/);
+		assert.match(body, /Speed bias[\s\S]*-25%/);
+		assert.match(body, /Risk[\s\S]*40%/);
+	} finally {
+		await cleanup();
+	}
+});
+
 test('scheduled race detail displays its snapshotted prize structure', async () => {
 	const { component, cleanup } = await serverComponent('RaceDetail');
 	try {

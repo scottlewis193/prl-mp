@@ -1,5 +1,10 @@
 <script lang="ts">
-	import { formatRaceSchedule, presentRace, raceStatusLabel } from '$lib/raceDiscovery';
+	import {
+		formatRaceSchedule,
+		presentRace,
+		presentTrackCharacteristics,
+		raceStatusLabel
+	} from '$lib/raceDiscovery';
 	import type { Race, Racer, RaceTrackType } from '$lib/types';
 
 	let {
@@ -10,6 +15,7 @@
 	}: { race: Race; racers?: Racer[]; racetrack: RaceTrackType; now?: Date } = $props();
 
 	const racePresentation = $derived(presentRace(race, racers, [racetrack]));
+	const trackPresentation = $derived(presentTrackCharacteristics(racetrack));
 	const ordinal = (position: number) => {
 		const remainder = position % 100;
 		if (remainder >= 11 && remainder <= 13) return `${position}th`;
@@ -33,6 +39,52 @@
 			{racePresentation.participantCount === 1 ? 'participant' : 'participants'}
 		</p>
 	</header>
+
+	<section aria-labelledby="track-characteristics-heading">
+		<h2 id="track-characteristics-heading" class="mb-3 text-xl font-semibold">
+			Track characteristics
+		</h2>
+		<dl
+			class="rounded-box border-base-300 bg-base-200 grid grid-cols-2 gap-4 border p-4 sm:grid-cols-4"
+		>
+			<div>
+				<dt class="text-sm opacity-70">Surface</dt>
+				<dd>{trackPresentation.surfaceLabel}</dd>
+			</div>
+			<div>
+				<dt class="text-sm opacity-70">Length</dt>
+				<dd>{trackPresentation.length.toLocaleString('en-GB')} px</dd>
+			</div>
+			<div>
+				<dt class="text-sm opacity-70">Width</dt>
+				<dd>{trackPresentation.width} px</dd>
+			</div>
+			<div>
+				<dt class="text-sm opacity-70">Formats</dt>
+				<dd>{trackPresentation.formatLabels.join(', ')}</dd>
+			</div>
+			<div>
+				<dt class="text-sm opacity-70">Cornering demand</dt>
+				<dd>{trackPresentation.corneringDemandPercent}%</dd>
+			</div>
+			<div>
+				<dt class="text-sm opacity-70">Speed bias</dt>
+				<dd>{trackPresentation.speedBiasPercent}%</dd>
+			</div>
+			<div>
+				<dt class="text-sm opacity-70">Risk</dt>
+				<dd>{trackPresentation.riskPercent}%</dd>
+			</div>
+			<div class="col-span-2 sm:col-span-4">
+				<dt class="text-sm opacity-70">Hazards</dt>
+				<dd>
+					{trackPresentation.hazardLabels.length > 0
+						? trackPresentation.hazardLabels.join(', ')
+						: 'None'}
+				</dd>
+			</div>
+		</dl>
+	</section>
 
 	{#if racePresentation.winnerName}
 		<section class="alert alert-success" aria-labelledby="winner-heading">
