@@ -67,9 +67,10 @@ export function presentRace(
 	tracks: RaceTrackType[]
 ): RacePresentation {
 	const racerById = new Map(racers.map((racer) => [racer.id, racer]));
+	const finishingOrder = Array.isArray(race.finishingOrder) ? race.finishingOrder : [];
 	const participantIds =
-		race.finishingOrder.length > 0
-			? race.finishingOrder
+		finishingOrder.length > 0
+			? finishingOrder
 			: racers
 					.filter((racer) => racer.race === race.id)
 					.flatMap((racer) => (racer.id ? [racer.id] : []));
@@ -90,7 +91,7 @@ export function presentRace(
 			position: index + 1,
 			amount
 		})),
-		results: race.finishingOrder.map((racerId, index) => ({
+		results: finishingOrder.map((racerId, index) => ({
 			position: index + 1,
 			racerId,
 			racerName: racerById.get(racerId)?.name ?? 'Unknown racer',

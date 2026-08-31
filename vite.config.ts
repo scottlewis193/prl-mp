@@ -4,9 +4,11 @@ import { defineConfig } from 'vite';
 import { enhancedImages } from '@sveltejs/enhanced-img';
 import { SvelteKitPWA } from '@vite-pwa/sveltekit';
 import { resolve } from 'path';
+import { pocketBaseRaceSettlementInterop } from './vite-plugins/pocketbaseCommonJs';
 
 export default defineConfig({
 	plugins: [
+		pocketBaseRaceSettlementInterop(),
 		enhancedImages(),
 		tailwindcss(),
 		sveltekit(),
@@ -15,9 +17,6 @@ export default defineConfig({
 			strategies: 'injectManifest',
 			srcDir: 'src',
 			filename: 'custom-sw-src.js',
-			devOptions: {
-				enabled: true
-			},
 
 			workbox: {
 				globPatterns: ['**/*.{js,css,html,ico,png,svg}']

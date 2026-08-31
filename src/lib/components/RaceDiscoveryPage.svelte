@@ -9,12 +9,14 @@
 		initialRaces,
 		initialRacers,
 		racetracks,
-		client
+		client,
+		liveUpdates = true
 	}: {
 		initialRaces: Race[];
 		initialRacers: Racer[];
 		racetracks: RaceTrackType[];
-		client: PocketBase;
+		client?: PocketBase;
+		liveUpdates?: boolean;
 	} = $props();
 	let races = $state(initialRaces);
 	let racers = $state(initialRacers);
@@ -25,12 +27,14 @@
 		let disposed = false;
 		let stop: (() => Promise<void>) | undefined;
 		const timer = window.setInterval(() => (now = new Date()), 1_000);
-		loading = true;
-		void subscribeToRaceDiscovery(client, { races, racers }).then(async (unsubscribe) => {
-			if (disposed) await unsubscribe();
-			else stop = unsubscribe;
-			loading = false;
-		});
+		if (liveUpdates && client) {
+			loading = true;
+			void subscribeToRaceDiscovery(client, { races, racers }).then(async (unsubscribe) => {
+				if (disposed) await unsubscribe();
+				else stop = unsubscribe;
+				loading = false;
+			});
+		}
 		return () => {
 			disposed = true;
 			window.clearInterval(timer);

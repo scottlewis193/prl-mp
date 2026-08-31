@@ -1,5 +1,6 @@
 import type { Race, Racer } from './types';
 import type PocketBase from 'pocketbase';
+import { applyRacerUpdate } from './racerUpdates';
 
 type RecordAction = 'create' | 'update' | 'delete';
 type RealtimeEvent<T> = { action: RecordAction; record: T };
@@ -27,17 +28,20 @@ export async function subscribeToRaceDiscovery(
 	pb: PocketBase,
 	state: RaceDiscoveryState
 ): Promise<() => Promise<void>> {
-	const [stopRaces, stopRacers] = await Promise.all([
-		pb.collection<Race>('races').subscribe('*', (event) => {
-			if (!isRecordAction(event.action)) return;
-			applyRecord(state.races, { action: event.action, record: event.record });
-			if (event.action === 'delete' && event.record.id) state.onRaceDeleted?.(event.record.id);
-		}),
-		pb.collection<Racer>('racers').subscribe('*', (event) => {
-			if (!isRecordAction(event.action)) return;
-			applyRecord(state.racers, { action: event.action, record: event.record });
-		})
-	]);
+	// PocketBase shares one EventSource between subscriptions. Establish it before
+	// adding another topic so Firefox doesn't report the superseded connection as
+	// a failed cross-origin request.
+	const stopRaces = await pb.collection<Race>('races').subscribe('*', (event) => {
+		if (!isRecordAction(event.action)) return;
+		applyRecord(state.races, { action: event.action, record: event.record });
+		if (event.action === 'delete' && event.record.id) state.onRaceDeleted?.(event.record.id);
+	});
+	const stopRacers = await pb.collection<Racer>('racers').subscribe('*', (event) => {
+		if (!isRecordAction(event.action)) return;
+		if (event.action === 'update' && event.record.positioning) {
+			applyRacerUpdate(state.racers, event.record);
+		} else applyRecord(state.racers, { action: event.action, record: event.record });
+	});
 
 	return async () => {
 		await Promise.all([stopRaces(), stopRacers()]);

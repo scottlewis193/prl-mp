@@ -11,6 +11,7 @@ import { female, male } from '$lib/server/static/names';
 import { Racer, Trainer, type Pokemon } from '$lib/types';
 import { resolvePocketBaseUrl } from '$lib/pocketbase-url';
 import { hasServerCredentials } from '$lib/server/pocketbase';
+import { configureRequestPocketBase } from '$lib/server/requestPocketBase';
 
 export const init: ServerInit = async () => {
 	if (hasServerCredentials) {
@@ -213,7 +214,9 @@ async function importGen1to5RacersToPocketBase() {
 
 export const handle = async ({ event, resolve }) => {
 	//get pb instance
-	event.locals.pb = new PocketBase(resolvePocketBaseUrl(PUBLIC_PB_URL));
+	event.locals.pb = configureRequestPocketBase(
+		new PocketBase(resolvePocketBaseUrl(PUBLIC_PB_URL))
+	);
 
 	// load the store data from the request cookie string
 	event.locals.pb.authStore.loadFromCookie(event.request.headers.get('cookie') || '');

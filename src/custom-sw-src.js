@@ -1,10 +1,15 @@
+/// <reference lib="webworker" />
+
 import { precacheAndRoute } from 'workbox-precaching';
 
+/** @type {ServiceWorkerGlobalScope & { __WB_MANIFEST: import('workbox-build').ManifestEntry[] }} */
+const serviceWorker = /** @type {any} */ (self);
+
 // This line is required for injectManifest to work
+// @ts-expect-error Workbox replaces this injected manifest token during the production build.
 precacheAndRoute(self.__WB_MANIFEST);
 
-//@ts-ignore
-self.addEventListener('push', (event) => {
+serviceWorker.addEventListener('push', (event) => {
 	console.log('push event!');
 	let data = {
 		title: 'Default Title',
@@ -19,8 +24,7 @@ self.addEventListener('push', (event) => {
 	}
 
 	event.waitUntil(
-		//@ts-ignore
-		self.registration.showNotification(data.title, {
+		serviceWorker.registration.showNotification(data.title, {
 			body: data.body
 		})
 	);

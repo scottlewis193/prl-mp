@@ -84,6 +84,21 @@ test('race presentation resolves track, participants, winner and finishing resul
 	});
 });
 
+test('race presentation treats a null PocketBase finishing order as no results', () => {
+	const pending = race('race-pending', 'pending', '2026-08-15T14:00:00Z');
+	pending.finishingOrder = null as unknown as string[];
+
+	assert.deepEqual(presentRace(pending, racers, [track]), {
+		race: pending,
+		trackName: 'Indigo Circuit',
+		participants: [],
+		participantCount: 0,
+		winnerName: undefined,
+		prizeStructure: [],
+		results: []
+	});
+});
+
 test('race schedule gives an exact time and a useful countdown', () => {
 	assert.equal(
 		formatRaceSchedule('2026-08-15T13:02:05Z', new Date('2026-08-15T13:00:00Z')),

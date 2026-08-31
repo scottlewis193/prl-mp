@@ -1,13 +1,17 @@
 <script lang="ts">
 	import RaceDiscoveryPage from '$lib/components/RaceDiscoveryPage.svelte';
-	import pb from '$lib/pocketbase';
+	import { getRacesContext } from '$lib/stores/race.svelte';
+	import { getRacersContext } from '$lib/stores/racer.svelte';
+	import { getRacetracksContext } from '$lib/stores/racetrack.svelte';
 
-	let { data } = $props();
+	const races = getRacesContext();
+	const racers = getRacersContext();
+	const racetracks = getRacetracksContext();
 </script>
 
 <RaceDiscoveryPage
-	initialRaces={data.races}
-	initialRacers={data.racers}
-	racetracks={data.racetracks}
-	client={pb}
+	initialRaces={races}
+	initialRacers={racers}
+	{racetracks}
+	liveUpdates={false}
 />

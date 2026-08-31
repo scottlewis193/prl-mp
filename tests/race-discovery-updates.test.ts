@@ -72,3 +72,68 @@ test('a deleted race is removed without accidentally deleting another race', asy
 	);
 	assert.equal(deletedId, 'race-1');
 });
+
+test('realtime topics are connected sequentially', async () => {
+	let activeSubscriptions = 0;
+	let maximumActiveSubscriptions = 0;
+	const pb = {
+		collection() {
+			return {
+				subscribe: async () => {
+					activeSubscriptions += 1;
+					maximumActiveSubscriptions = Math.max(maximumActiveSubscriptions, activeSubscriptions);
+					await Promise.resolve();
+					activeSubscriptions -= 1;
+					return () => undefined;
+				}
+			};
+		}
+	};
+
+	await subscribeToRaceDiscovery(pb as never, { races: [], racers: [] });
+
+	assert.equal(maximumActiveSubscriptions, 1);
+});
+
+test('a live race racer update advances the rendered movement target', async () => {
+	const callbacks = new Map<string, (event: any) => void>();
+	const pb = {
+		collection(name: string) {
+			return {
+				subscribe: async (_topic: string, callback: (event: any) => void) => {
+					callbacks.set(name, callback);
+					return () => undefined;
+				}
+			};
+		}
+	};
+	const racers = [
+		{
+			id: 'racer-1',
+			positioning: { x: 10, y: 20, targetTrackOffset: 0 },
+			_displayX: 12,
+			_displayY: 22,
+			_lastTargetX: 10,
+			_lastTargetY: 20,
+			_targetX: 15,
+			_targetY: 25,
+			_interpStartTime: 0,
+			_interpDuration: 500
+		}
+	] as Racer[];
+
+	await subscribeToRaceDiscovery(pb as never, { races: [], racers });
+	callbacks.get('racers')?.({
+		action: 'update',
+		record: {
+			id: 'racer-1',
+			positioning: { x: 100, y: 200, targetTrackOffset: 0 }
+		}
+	});
+
+	assert.equal(racers[0]._lastTargetX, 12);
+	assert.equal(racers[0]._lastTargetY, 22);
+	assert.equal(racers[0]._targetX, 100);
+	assert.equal(racers[0]._targetY, 200);
+	assert.ok(racers[0]._interpStartTime > 0);
+});

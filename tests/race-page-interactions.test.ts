@@ -119,6 +119,7 @@ test('the open race index loads realtime data then visibly reclassifies race and
 		assert.match(target.textContent ?? '', /Loading races/i);
 
 		subscriptionResolvers.get('races')?.(() => undefined);
+		await new Promise((resolve) => setTimeout(resolve, 0));
 		subscriptionResolvers.get('racers')?.(() => undefined);
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		await tick();

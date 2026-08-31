@@ -17,13 +17,25 @@ function requestWith(fields: Record<string, string>): Request {
 
 test('layout initializes every route with the authenticated player', async () => {
 	const user = { id: 'player-1', name: 'Misty', watchlist: ['racer-7'] };
+	const records = {
+		races: [{ id: 'race-1' }],
+		racers: [{ id: 'racer-1' }],
+		racetracks: [{ id: 'track-1' }]
+	};
 
 	const result = await loadLayout({
-		locals: { user },
+		locals: {
+			user,
+			pb: {
+				collection(name: keyof typeof records) {
+					return { getFullList: async () => records[name] };
+				}
+			}
+		},
 		url: new URL('http://localhost/exchange')
 	} as never);
 
-	assert.deepEqual(result, { user, url: '/exchange' });
+	assert.deepEqual(result, { user, url: '/exchange', ...records });
 });
 
 test('logout clears server authentication state and returns to the login flow', async () => {

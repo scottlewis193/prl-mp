@@ -45,13 +45,15 @@
 		setRacesContext(data.races);
 		setRacetracksContext(data.racetracks);
 	}
+	const races = getRacesContext();
+	const racers = getRacersContext();
 
 	onMount(async () => {
 		pb.authStore.loadFromCookie(document.cookie);
-		await Promise.all([
-			subscribeToRaces(getRacesContext(), pb),
-			subscribeToRacers(getRacersContext(), pb)
-		]);
+		// PocketBase shares one EventSource across topics; let the first connection
+		// settle before registering the next topic.
+		await subscribeToRaces(races, pb);
+		await subscribeToRacers(racers, pb);
 		//set theme color (status bar on mobile devices) from base color variable
 		const barColor = window.getComputedStyle(document.body).getPropertyValue('--color-base-200');
 		const themeColor = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement;
