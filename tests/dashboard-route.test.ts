@@ -130,3 +130,68 @@ test('dashboard repository exposes backend failures to the server loader', async
 		/backend unavailable/i
 	);
 });
+
+test('dashboard repository loads completed seasons, awards, and league movements', async () => {
+	const result = await loadDashboard(
+		dashboardClient({
+			accountLedger: [],
+			wagers: [],
+			holdings: [],
+			racers: [{ id: 'racer-1', name: 'Bolt' }],
+			races: [],
+			racetracks: [],
+			seasons: [
+				{
+					id: 'season-1',
+					name: 'Season 1',
+					status: 'completed',
+					movementCount: 1,
+					endedAt: '2026-08-31T12:00:00Z'
+				}
+			],
+			leagues: [{ id: 'league-1', name: 'Premier League', minRanking: 1, maxPlayers: 1 }],
+			leagueStandings: [
+				{
+					season: 'season-1',
+					league: 'league-1',
+					racer: 'racer-1',
+					points: 25,
+					starts: 1,
+					wins: 1,
+					podiums: 1,
+					bestFinish: 1,
+					recentForm: [1]
+				}
+			],
+			seasonAwards: [
+				{
+					season: 'season-1',
+					league: 'league-1',
+					racer: 'racer-1',
+					type: 'league_champion',
+					position: 1,
+					name: 'Season 1 Premier League champion',
+					occurredAt: '2026-08-31T12:00:00Z'
+				}
+			],
+			leagueMovements: [
+				{
+					season: 'season-1',
+					racer: 'racer-1',
+					fromLeague: 'league-1',
+					toLeague: 'league-1',
+					direction: 'promoted',
+					fromPosition: 1,
+					occurredAt: '2026-08-31T12:00:00Z'
+				}
+			]
+		}) as never,
+		{ id: 'player-1', balance: 0, watchlist: [] }
+	);
+
+	assert.equal(
+		result.priorSeasons[0]?.leagueTables[0]?.rows[0]?.awardName,
+		'Season 1 Premier League champion'
+	);
+	assert.equal(result.racerMovementHistory[0]?.racerName, 'Bolt');
+});

@@ -161,6 +161,45 @@ const populatedDashboard = {
 				}
 			]
 		}
+	],
+	priorSeasons: [
+		{
+			seasonId: 'season-0',
+			seasonName: 'Season 0',
+			endedAt: '2026-07-31T12:00:00Z',
+			leagueTables: [
+				{
+					leagueId: 'league-1',
+					leagueName: 'Starter League',
+					rows: [
+						{
+							position: 1,
+							racerId: 'racer-1',
+							racerName: 'Bolt',
+							points: 60,
+							starts: 5,
+							wins: 3,
+							podiums: 4,
+							bestFinish: 1,
+							recentForm: [1, 1, 2, 3, 1],
+							awardName: 'Season 0 Starter League champion'
+						}
+					]
+				}
+			]
+		}
+	],
+	racerMovementHistory: [
+		{
+			seasonName: 'Season 0',
+			racerId: 'racer-2',
+			racerName: 'Dash',
+			direction: 'promoted' as const,
+			fromLeagueName: 'Academy League',
+			toLeagueName: 'Starter League',
+			fromPosition: 1,
+			occurredAt: '2026-07-31T12:00:00Z'
+		}
 	]
 };
 
@@ -194,6 +233,14 @@ test('dashboard renders live account, holdings, race and watched-racer informati
 		assert.match(body, /Position.*Points.*Starts.*Wins.*Podiums.*Best.*Recent form.*Movement/is);
 		assert.match(body, /Bolt.*25.*2.*1.*2.*1.*1.*2.*Promotion/is);
 		assert.match(body, /Dash.*18.*2.*0.*1.*2.*2.*4.*Relegation/is);
+		assert.match(body, /Previous seasons/i);
+		assert.match(
+			body,
+			/Previous seasons.*Position.*Points.*Starts.*Wins.*Podiums.*Best.*Recent form.*Award/is
+		);
+		assert.match(body, /Season 0.*Starter League.*Bolt.*60.*Champion/is);
+		assert.match(body, /Promotion and relegation history/i);
+		assert.match(body, /Dash.*Promoted.*Academy League.*Starter League.*Season 0/is);
 		assert.doesNotMatch(body, /Send Test Notification|Avatar Tailwind|>Test</);
 	} finally {
 		await cleanup();
@@ -234,7 +281,9 @@ test('dashboard renders useful loading, backend-error and section-level empty st
 					upcomingRaces: [],
 					recentResults: [],
 					watchedActivity: [],
-					leagueTables: []
+					leagueTables: [],
+					priorSeasons: [],
+					racerMovementHistory: []
 				}
 			}
 		}).body;
@@ -243,6 +292,8 @@ test('dashboard renders useful loading, backend-error and section-level empty st
 		assert.match(empty, /No recent results yet/i);
 		assert.match(empty, /No watched-racer activity yet/i);
 		assert.match(empty, /No active league tables are available/i);
+		assert.match(empty, /No completed seasons yet/i);
+		assert.match(empty, /No promotion or relegation history yet/i);
 	} finally {
 		await cleanup();
 	}

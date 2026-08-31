@@ -48,6 +48,7 @@ export type DashboardSeasonRecord = {
 	name: string;
 	status: 'active' | 'completed';
 	movementCount: number;
+	endedAt?: string;
 };
 
 export type DashboardLeagueRecord = {
@@ -67,6 +68,26 @@ export type DashboardStandingRecord = {
 	podiums: number;
 	bestFinish: number;
 	recentForm: number[];
+};
+
+export type DashboardSeasonAwardRecord = {
+	season: string;
+	league: string;
+	racer: string;
+	type: 'league_champion';
+	position: number;
+	name: string;
+	occurredAt: string;
+};
+
+export type DashboardLeagueMovementRecord = {
+	season: string;
+	racer: string;
+	fromLeague: string;
+	toLeague: string;
+	direction: 'promoted' | 'relegated';
+	fromPosition: number;
+	occurredAt: string;
 };
 
 export type DashboardRaceRecord = {
@@ -128,6 +149,28 @@ export type DashboardLeagueTable = {
 	rows: DashboardLeagueTableRow[];
 };
 
+export type DashboardPriorSeason = {
+	seasonId: string;
+	seasonName: string;
+	endedAt: string;
+	leagueTables: {
+		leagueId: string;
+		leagueName: string;
+		rows: (Omit<DashboardLeagueTableRow, 'movementZone'> & { awardName: string | null })[];
+	}[];
+};
+
+export type DashboardRacerMovement = {
+	seasonName: string;
+	racerId: string;
+	racerName: string;
+	direction: 'promoted' | 'relegated';
+	fromLeagueName: string;
+	toLeagueName: string;
+	fromPosition: number;
+	occurredAt: string;
+};
+
 export type DashboardView = {
 	account: { balance: number; change: number; period: 'Last 24 hours' };
 	wagering: {
@@ -152,6 +195,8 @@ export type DashboardView = {
 	recentResults: DashboardResult[];
 	watchedActivity: DashboardActivity[];
 	leagueTables: DashboardLeagueTable[];
+	priorSeasons: DashboardPriorSeason[];
+	racerMovementHistory: DashboardRacerMovement[];
 };
 
 type DashboardInput = {
@@ -166,6 +211,8 @@ type DashboardInput = {
 	seasons?: DashboardSeasonRecord[];
 	leagues?: DashboardLeagueRecord[];
 	standings?: DashboardStandingRecord[];
+	seasonAwards?: DashboardSeasonAwardRecord[];
+	leagueMovements?: DashboardLeagueMovementRecord[];
 	now?: Date;
 };
 
@@ -350,6 +397,26 @@ function watchedActivitySummary(
 		.slice(0, 5);
 }
 
+function orderedStandingsForLeague(
+	standings: DashboardStandingRecord[],
+	seasonId: string,
+	leagueId: string
+) {
+	return orderLeagueStandings(
+		standings
+			.filter((standing) => standing.season === seasonId && standing.league === leagueId)
+			.map((standing) => ({
+				racerId: standing.racer,
+				points: Number(standing.points) || 0,
+				starts: Number(standing.starts) || 0,
+				wins: Number(standing.wins) || 0,
+				podiums: Number(standing.podiums) || 0,
+				bestFinish: Number(standing.bestFinish) || 0,
+				recentForm: Array.isArray(standing.recentForm) ? standing.recentForm.map(Number) : []
+			}))
+	);
+}
+
 function leagueTableSummaries(
 	seasons: DashboardSeasonRecord[],
 	leagues: DashboardLeagueRecord[],
@@ -364,19 +431,7 @@ function leagueTableSummaries(
 	const movementCount = Math.max(0, Math.floor(Number(season.movementCount) || 0));
 
 	return orderedLeagues.map((league, leagueIndex) => {
-		const orderedRows = orderLeagueStandings(
-			standings
-				.filter((standing) => standing.season === season.id && standing.league === league.id)
-				.map((standing) => ({
-					racerId: standing.racer,
-					points: Number(standing.points) || 0,
-					starts: Number(standing.starts) || 0,
-					wins: Number(standing.wins) || 0,
-					podiums: Number(standing.podiums) || 0,
-					bestFinish: Number(standing.bestFinish) || 0,
-					recentForm: Array.isArray(standing.recentForm) ? standing.recentForm.map(Number) : []
-				}))
-		);
+		const orderedRows = orderedStandingsForLeague(standings, season.id, league.id);
 		return {
 			leagueId: league.id,
 			leagueName: league.name,
@@ -403,6 +458,78 @@ function leagueTableSummaries(
 	});
 }
 
+function priorSeasonSummaries(
+	seasons: DashboardSeasonRecord[],
+	leagues: DashboardLeagueRecord[],
+	standings: DashboardStandingRecord[],
+	seasonAwards: DashboardSeasonAwardRecord[],
+	racersById: Map<string, DashboardRacerRecord>
+): DashboardPriorSeason[] {
+	const orderedLeagues = [...leagues].sort(
+		(left, right) => left.minRanking - right.minRanking || left.id.localeCompare(right.id)
+	);
+	return seasons
+		.filter((season) => season.status === 'completed')
+		.toSorted(
+			(left, right) =>
+				timestampOrZero(right.endedAt ?? '') - timestampOrZero(left.endedAt ?? '') ||
+				right.id.localeCompare(left.id)
+		)
+		.map((season) => ({
+			seasonId: season.id,
+			seasonName: season.name,
+			endedAt: season.endedAt ?? '',
+			leagueTables: orderedLeagues.map((league) => ({
+				leagueId: league.id,
+				leagueName: league.name,
+				rows: orderedStandingsForLeague(standings, season.id, league.id).map((standing, index) => ({
+					position: index + 1,
+					racerId: standing.racerId,
+					racerName: racersById.get(standing.racerId)?.name ?? 'Unknown racer',
+					points: standing.points,
+					starts: standing.starts,
+					wins: standing.wins,
+					podiums: standing.podiums,
+					bestFinish: standing.bestFinish,
+					recentForm: standing.recentForm,
+					awardName:
+						seasonAwards.find(
+							(award) =>
+								award.season === season.id &&
+								award.league === league.id &&
+								award.racer === standing.racerId
+						)?.name ?? null
+				}))
+			}))
+		}));
+}
+
+function racerMovementSummaries(
+	movements: DashboardLeagueMovementRecord[],
+	seasons: DashboardSeasonRecord[],
+	leagues: DashboardLeagueRecord[],
+	racersById: Map<string, DashboardRacerRecord>
+): DashboardRacerMovement[] {
+	const seasonsById = new Map(seasons.map((season) => [season.id, season]));
+	const leaguesById = new Map(leagues.map((league) => [league.id, league]));
+	return movements
+		.toSorted(
+			(left, right) =>
+				timestampOrZero(right.occurredAt) - timestampOrZero(left.occurredAt) ||
+				left.racer.localeCompare(right.racer)
+		)
+		.map((movement) => ({
+			seasonName: seasonsById.get(movement.season)?.name ?? 'Unknown season',
+			racerId: movement.racer,
+			racerName: racersById.get(movement.racer)?.name ?? 'Unknown racer',
+			direction: movement.direction,
+			fromLeagueName: leaguesById.get(movement.fromLeague)?.name ?? 'Unknown league',
+			toLeagueName: leaguesById.get(movement.toLeague)?.name ?? 'Unknown league',
+			fromPosition: Number(movement.fromPosition) || 0,
+			occurredAt: movement.occurredAt
+		}));
+}
+
 export function aggregateDashboard(input: DashboardInput): DashboardView {
 	const racersById = new Map(
 		input.racers.flatMap((racer) => (racer.id ? [[racer.id, racer] as const] : []))
@@ -427,6 +554,19 @@ export function aggregateDashboard(input: DashboardInput): DashboardView {
 			input.seasons ?? [],
 			input.leagues ?? [],
 			input.standings ?? [],
+			racersById
+		),
+		priorSeasons: priorSeasonSummaries(
+			input.seasons ?? [],
+			input.leagues ?? [],
+			input.standings ?? [],
+			input.seasonAwards ?? [],
+			racersById
+		),
+		racerMovementHistory: racerMovementSummaries(
+			input.leagueMovements ?? [],
+			input.seasons ?? [],
+			input.leagues ?? [],
 			racersById
 		)
 	};

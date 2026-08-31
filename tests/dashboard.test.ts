@@ -334,3 +334,142 @@ test('dashboard builds every league table with deterministic positions and movem
 		}
 	]);
 });
+
+test('dashboard exposes completed-season standings, awards, and racer league movement history', () => {
+	const dashboard = aggregateDashboard({
+		balance: 0,
+		ledger: [],
+		wagers: [],
+		holdings: [],
+		racers: [
+			{ id: 'racer-a', name: 'Alpha' },
+			{ id: 'racer-b', name: 'Beta' }
+		],
+		races: [],
+		racetracks: [],
+		watchlist: [],
+		seasons: [
+			{
+				id: 'season-2',
+				name: 'Season 2',
+				status: 'active',
+				movementCount: 1
+			},
+			{
+				id: 'season-1',
+				name: 'Season 1',
+				status: 'completed',
+				movementCount: 1,
+				endedAt: '2026-08-31T12:00:00Z'
+			}
+		],
+		leagues: [
+			{ id: 'league-top', name: 'Premier League', minRanking: 1, maxPlayers: 1 },
+			{ id: 'league-lower', name: 'Challenger League', minRanking: 2, maxPlayers: 1 }
+		],
+		standings: [
+			{
+				season: 'season-1',
+				league: 'league-top',
+				racer: 'racer-a',
+				points: 50,
+				starts: 4,
+				wins: 2,
+				podiums: 3,
+				bestFinish: 1,
+				recentForm: [1, 2, 1, 3]
+			},
+			{
+				season: 'season-1',
+				league: 'league-lower',
+				racer: 'racer-b',
+				points: 40,
+				starts: 4,
+				wins: 1,
+				podiums: 2,
+				bestFinish: 1,
+				recentForm: [2, 1, 4, 2]
+			}
+		],
+		seasonAwards: [
+			{
+				season: 'season-1',
+				league: 'league-top',
+				racer: 'racer-a',
+				type: 'league_champion',
+				position: 1,
+				name: 'Season 1 Premier League champion',
+				occurredAt: '2026-08-31T12:00:00Z'
+			}
+		],
+		leagueMovements: [
+			{
+				season: 'season-1',
+				racer: 'racer-b',
+				fromLeague: 'league-lower',
+				toLeague: 'league-top',
+				direction: 'promoted',
+				fromPosition: 1,
+				occurredAt: '2026-08-31T12:00:00Z'
+			}
+		]
+	});
+
+	assert.deepEqual(dashboard.priorSeasons, [
+		{
+			seasonId: 'season-1',
+			seasonName: 'Season 1',
+			endedAt: '2026-08-31T12:00:00Z',
+			leagueTables: [
+				{
+					leagueId: 'league-top',
+					leagueName: 'Premier League',
+					rows: [
+						{
+							position: 1,
+							racerId: 'racer-a',
+							racerName: 'Alpha',
+							points: 50,
+							starts: 4,
+							wins: 2,
+							podiums: 3,
+							bestFinish: 1,
+							recentForm: [1, 2, 1, 3],
+							awardName: 'Season 1 Premier League champion'
+						}
+					]
+				},
+				{
+					leagueId: 'league-lower',
+					leagueName: 'Challenger League',
+					rows: [
+						{
+							position: 1,
+							racerId: 'racer-b',
+							racerName: 'Beta',
+							points: 40,
+							starts: 4,
+							wins: 1,
+							podiums: 2,
+							bestFinish: 1,
+							recentForm: [2, 1, 4, 2],
+							awardName: null
+						}
+					]
+				}
+			]
+		}
+	]);
+	assert.deepEqual(dashboard.racerMovementHistory, [
+		{
+			seasonName: 'Season 1',
+			racerId: 'racer-b',
+			racerName: 'Beta',
+			direction: 'promoted',
+			fromLeagueName: 'Challenger League',
+			toLeagueName: 'Premier League',
+			fromPosition: 1,
+			occurredAt: '2026-08-31T12:00:00Z'
+		}
+	]);
+});

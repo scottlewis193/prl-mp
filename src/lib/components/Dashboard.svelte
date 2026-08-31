@@ -227,6 +227,77 @@
 			</div>
 		</section>
 
+		<section class="card card-border bg-base-200 lg:col-span-2 xl:col-span-3">
+			<div class="card-body">
+				<h2 class="card-title">Previous seasons</h2>
+				{#if dashboard.priorSeasons.length === 0}
+					<p class="text-base-content/70">No completed seasons yet.</p>
+				{:else}
+					{#each dashboard.priorSeasons as season (season.seasonId)}
+						<section class="border-base-300 rounded-box overflow-hidden border">
+							<h3 class="bg-base-300 px-4 py-3 text-lg font-semibold">
+								{season.seasonName} · completed {activityTime(season.endedAt)}
+							</h3>
+							<div class="grid gap-4 p-4 xl:grid-cols-2">
+								{#each season.leagueTables as table (table.leagueId)}
+									<section>
+										<h4 class="font-semibold">{table.leagueName}</h4>
+										<div class="overflow-x-auto">
+											<table class="table-sm table">
+												<thead>
+													<tr>
+														<th>Position</th><th>Racer</th><th>Points</th><th>Starts</th><th
+															>Wins</th
+														><th>Podiums</th><th>Best</th><th>Recent form</th><th>Award</th>
+													</tr>
+												</thead>
+												<tbody>
+													{#each table.rows as row (row.racerId)}
+														<tr>
+															<td>{row.position}</td>
+															<td class="font-semibold">{row.racerName}</td>
+															<td>{row.points}</td>
+															<td>{row.starts}</td>
+															<td>{row.wins}</td>
+															<td>{row.podiums}</td>
+															<td>{row.bestFinish || '—'}</td>
+															<td>{row.recentForm.length > 0 ? row.recentForm.join(' · ') : '—'}</td
+															>
+															<td>{row.awardName ? 'Champion' : '—'}</td>
+														</tr>
+													{/each}
+												</tbody>
+											</table>
+										</div>
+									</section>
+								{/each}
+							</div>
+						</section>
+					{/each}
+				{/if}
+			</div>
+		</section>
+
+		<section class="card card-border bg-base-200 lg:col-span-2 xl:col-span-3">
+			<div class="card-body">
+				<h2 class="card-title">Promotion and relegation history</h2>
+				{#if dashboard.racerMovementHistory.length === 0}
+					<p class="text-base-content/70">No promotion or relegation history yet.</p>
+				{:else}
+					<ul class="divide-base-300 divide-y">
+						{#each dashboard.racerMovementHistory as movement (`${movement.seasonName}-${movement.racerId}`)}
+							<li class="py-3">
+								<strong>{movement.racerName}</strong> ·
+								{movement.direction === 'promoted' ? 'Promoted' : 'Relegated'} from
+								{movement.fromLeagueName} to {movement.toLeagueName} after finishing
+								{movement.fromPosition} in {movement.seasonName}
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</div>
+		</section>
+
 		<section class="card card-border bg-base-200">
 			<div class="card-body">
 				<h2 class="card-title">Upcoming races</h2>
