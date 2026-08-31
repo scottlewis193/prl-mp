@@ -5,7 +5,8 @@ import type {
 	DashboardLedgerEntry,
 	DashboardRacerRecord,
 	DashboardRaceRecord,
-	DashboardTrackRecord
+	DashboardTrackRecord,
+	DashboardWagerRecord
 } from '$lib/dashboard';
 
 type DashboardUser = {
@@ -15,10 +16,14 @@ type DashboardUser = {
 };
 
 export async function loadDashboard(pb: PocketBase, user: DashboardUser) {
-	const [ledger, holdings, racers, races, racetracks] = await Promise.all([
+	const [ledger, wagers, holdings, racers, races, racetracks] = await Promise.all([
 		pb.collection('accountLedger').getFullList({
 			sort: '-occurredAt',
-			fields: 'balanceDelta,balanceAfter,occurredAt'
+			fields: 'type,balanceDelta,balanceAfter,occurredAt'
+		}),
+		pb.collection('wagers').getFullList({
+			sort: '-placedAt',
+			fields: 'status,stake,payout'
 		}),
 		pb.collection('holdings').getFullList({
 			fields: 'player,racer,quantity,costBasis'
@@ -38,6 +43,7 @@ export async function loadDashboard(pb: PocketBase, user: DashboardUser) {
 		balance: Number(user.balance ?? 0),
 		watchlist: Array.isArray(user.watchlist) ? user.watchlist.map(String) : [],
 		ledger: ledger as unknown as DashboardLedgerEntry[],
+		wagers: wagers as unknown as DashboardWagerRecord[],
 		holdings: holdings as unknown as DashboardHoldingRecord[],
 		racers: racers as unknown as DashboardRacerRecord[],
 		races: races as unknown as DashboardRaceRecord[],

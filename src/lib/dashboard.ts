@@ -2,11 +2,25 @@ import { formatMarketPrice } from './exchangePresentation';
 import type { RaceType } from './types';
 
 type RaceStatus = RaceType['status'];
+type LedgerEntryType =
+	| 'account_opened'
+	| 'buy'
+	| 'sell'
+	| 'wager_reserve'
+	| 'wager_payout'
+	| 'wager_refund';
 
 export type DashboardLedgerEntry = {
+	type: LedgerEntryType;
 	balanceDelta: number;
 	balanceAfter: number;
 	occurredAt: string;
+};
+
+export type DashboardWagerRecord = {
+	status: 'open' | 'won' | 'lost' | 'refunded';
+	stake: number;
+	payout: number;
 };
 
 export type DashboardHoldingRecord = {
@@ -69,6 +83,17 @@ export type DashboardActivity = {
 
 export type DashboardView = {
 	account: { balance: number; change: number; period: 'Last 24 hours' };
+	wagering: {
+		count: number;
+		open: number;
+		wins: number;
+		losses: number;
+		refunds: number;
+		totalStaked: number;
+		totalPayout: number;
+		profit: number;
+	};
+	trading: { trades: number; buys: number; sells: number };
 	portfolio: {
 		costBasis: number;
 		marketValue: number | null;
@@ -84,6 +109,7 @@ export type DashboardView = {
 type DashboardInput = {
 	balance: number;
 	ledger: DashboardLedgerEntry[];
+	wagers: DashboardWagerRecord[];
 	holdings: DashboardHoldingRecord[];
 	racers: DashboardRacerRecord[];
 	races: DashboardRaceRecord[];
@@ -104,6 +130,8 @@ function ordinal(position: number): string {
 }
 
 function accountSummary(balance: number, ledger: DashboardLedgerEntry[], now: Date) {
+	const ledgerBalance = ledger.reduce((total, entry) => total + Number(entry.balanceDelta), 0);
+	const currentBalance = ledger.length > 0 ? roundMoney(ledgerBalance) : Number(balance);
 	const dayAgo = now.getTime() - 24 * 60 * 60 * 1_000;
 	const change = ledger.reduce(
 		(total, entry) =>
@@ -113,7 +141,52 @@ function accountSummary(balance: number, ledger: DashboardLedgerEntry[], now: Da
 				: total,
 		0
 	);
-	return { balance: Number(balance) || 0, change, period: 'Last 24 hours' as const };
+	return {
+		balance: Number.isFinite(currentBalance) ? currentBalance : 0,
+		change,
+		period: 'Last 24 hours' as const
+	};
+}
+
+function roundMoney(value: number): number {
+	return Math.round(value * 100) / 100;
+}
+
+function wageringSummary(wagers: DashboardWagerRecord[]): DashboardView['wagering'] {
+	let open = 0;
+	let wins = 0;
+	let losses = 0;
+	let refunds = 0;
+	let totalStaked = 0;
+	let totalPayout = 0;
+	let profit = 0;
+	for (const wager of wagers) {
+		totalStaked += Number(wager.stake);
+		totalPayout += Number(wager.payout);
+		if (wager.status === 'open') open += 1;
+		else {
+			profit += Number(wager.payout) - Number(wager.stake);
+			if (wager.status === 'won') wins += 1;
+			else if (wager.status === 'lost') losses += 1;
+			else refunds += 1;
+		}
+	}
+	return {
+		count: wagers.length,
+		open,
+		wins,
+		losses,
+		refunds,
+		totalStaked: roundMoney(totalStaked),
+		totalPayout: roundMoney(totalPayout),
+		profit: roundMoney(profit)
+	};
+}
+
+function tradingSummary(ledger: DashboardLedgerEntry[]): DashboardView['trading'] {
+	const buys = ledger.filter((entry) => entry.type === 'buy').length;
+	const sells = ledger.filter((entry) => entry.type === 'sell').length;
+	return { trades: buys + sells, buys, sells };
 }
 
 function portfolioSummary(
@@ -241,6 +314,8 @@ export function aggregateDashboard(input: DashboardInput): DashboardView {
 
 	return {
 		account: accountSummary(input.balance, input.ledger, input.now ?? new Date()),
+		wagering: wageringSummary(input.wagers),
+		trading: tradingSummary(input.ledger),
 		portfolio: portfolioSummary(input.holdings, racersById),
 		...races,
 		watchedActivity: watchedActivitySummary(input.racers, input.watchlist, racesById)

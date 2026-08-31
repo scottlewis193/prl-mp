@@ -33,6 +33,10 @@
 				})} UTC`
 			: 'Time unavailable';
 	}
+
+	function countLabel(count: number, singular: string): string {
+		return `${count.toLocaleString()} ${singular}${count === 1 ? '' : 's'}`;
+	}
 </script>
 
 {#if loading}
@@ -66,9 +70,55 @@
 
 		<section class="card card-border bg-base-200 lg:col-span-2">
 			<div class="card-body">
+				<h2 class="card-title">Wagering activity</h2>
+				<p class="text-base-content/70">
+					{countLabel(dashboard.wagering.count, 'wager')} ·
+					{countLabel(dashboard.wagering.open, 'open wager')}
+				</p>
+				<div class="grid grid-cols-3 gap-3">
+					<div>
+						<p class="text-base-content/70 text-sm">Wins</p>
+						<p>{countLabel(dashboard.wagering.wins, 'win')}</p>
+					</div>
+					<div>
+						<p class="text-base-content/70 text-sm">Losses</p>
+						<p>{countLabel(dashboard.wagering.losses, 'loss')}</p>
+					</div>
+					<div>
+						<p class="text-base-content/70 text-sm">Refunds</p>
+						<p>{countLabel(dashboard.wagering.refunds, 'refund')}</p>
+					</div>
+					<div>
+						<p class="text-base-content/70 text-sm">Staked</p>
+						<p>{formatMarketPrice(dashboard.wagering.totalStaked)}</p>
+					</div>
+					<div>
+						<p class="text-base-content/70 text-sm">Payout</p>
+						<p>{formatMarketPrice(dashboard.wagering.totalPayout)}</p>
+					</div>
+					<div>
+						<p class="text-base-content/70 text-sm">Settled P/L</p>
+						<p
+							class:text-success={dashboard.wagering.profit > 0}
+							class:text-error={dashboard.wagering.profit < 0}
+						>
+							{signedPrice(dashboard.wagering.profit)}
+						</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<section class="card card-border bg-base-200 lg:col-span-2">
+			<div class="card-body">
 				<div class="flex flex-wrap items-start justify-between gap-3">
 					<div>
 						<h2 class="card-title">Holdings performance</h2>
+						<p class="text-base-content/70">
+							{countLabel(dashboard.trading.trades, 'trade')} ·
+							{countLabel(dashboard.trading.buys, 'buy')} ·
+							{countLabel(dashboard.trading.sells, 'sell')}
+						</p>
 						<p class="text-base-content/70">
 							Market value {formatMarketPrice(dashboard.portfolio.marketValue)} from
 							{formatMarketPrice(dashboard.portfolio.costBasis)} invested

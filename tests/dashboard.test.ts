@@ -5,15 +5,32 @@ import { aggregateDashboard } from '../src/lib/dashboard';
 
 test('dashboard aggregation calculates account, holdings, races and watched activity from live records', () => {
 	const dashboard = aggregateDashboard({
-		balance: 9_970,
+		balance: 5_000,
 		ledger: [
 			{
+				type: 'account_opened',
 				balanceDelta: 10_000,
 				balanceAfter: 10_000,
 				occurredAt: '2026-08-13T12:00:00Z'
 			},
-			{ balanceDelta: -50, balanceAfter: 9_950, occurredAt: '2026-08-15T09:00:00Z' },
-			{ balanceDelta: 20, balanceAfter: 9_970, occurredAt: '2026-08-15T11:00:00Z' }
+			{
+				type: 'buy',
+				balanceDelta: -50,
+				balanceAfter: 9_950,
+				occurredAt: '2026-08-15T09:00:00Z'
+			},
+			{
+				type: 'sell',
+				balanceDelta: 20,
+				balanceAfter: 9_970,
+				occurredAt: '2026-08-15T09:00:00Z'
+			}
+		],
+		wagers: [
+			{ status: 'open', stake: 10, payout: 0 },
+			{ status: 'won', stake: 20, payout: 50 },
+			{ status: 'lost', stake: 15, payout: 0 },
+			{ status: 'refunded', stake: 5, payout: 5 }
 		],
 		holdings: [
 			{ player: 'player-1', racer: 'racer-1', quantity: 10, costBasis: 100 },
@@ -75,6 +92,17 @@ test('dashboard aggregation calculates account, holdings, races and watched acti
 		change: -30,
 		period: 'Last 24 hours'
 	});
+	assert.deepEqual(dashboard.wagering, {
+		count: 4,
+		open: 1,
+		wins: 1,
+		losses: 1,
+		refunds: 1,
+		totalStaked: 50,
+		totalPayout: 55,
+		profit: 15
+	});
+	assert.deepEqual(dashboard.trading, { trades: 2, buys: 1, sells: 1 });
 	assert.deepEqual(dashboard.portfolio, {
 		costBasis: 150,
 		marketValue: 160,
@@ -146,6 +174,7 @@ test('portfolio totals preserve all invested cost and do not claim a complete re
 	const dashboard = aggregateDashboard({
 		balance: 100,
 		ledger: [],
+		wagers: [],
 		holdings: [
 			{ player: 'player-1', racer: 'priced', quantity: 2, costBasis: 30 },
 			{ player: 'player-1', racer: 'unpriced', quantity: 4, costBasis: 70 }

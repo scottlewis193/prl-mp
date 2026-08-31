@@ -74,6 +74,17 @@ async function serverDashboardPage() {
 
 const populatedDashboard = {
 	account: { balance: 9_970, change: -30, period: 'Last 24 hours' as const },
+	wagering: {
+		count: 4,
+		open: 1,
+		wins: 1,
+		losses: 1,
+		refunds: 1,
+		totalStaked: 50,
+		totalPayout: 55,
+		profit: 15
+	},
+	trading: { trades: 3, buys: 2, sells: 1 },
 	portfolio: {
 		costBasis: 100,
 		marketValue: 120,
@@ -127,7 +138,16 @@ test('dashboard renders live account, holdings, race and watched-racer informati
 		assert.match(body, /₽9,970/);
 		assert.match(body, /-₽30/);
 		assert.match(body, /Last 24 hours/);
+		assert.match(body, /Wagering activity/i);
+		assert.match(body, /4 wagers/i);
+		assert.match(body, /1 win/i);
+		assert.match(body, /1 loss/i);
+		assert.match(body, /1 refund/i);
+		assert.match(body, /Staked.*₽50/is);
+		assert.match(body, /Payout.*₽55/is);
+		assert.match(body, /Settled P\/L.*\+₽15/is);
 		assert.match(body, /Holdings performance/i);
+		assert.match(body, /3 trades.*2 buys.*1 sell/is);
 		assert.match(body, /Bolt/);
 		assert.match(body, /₽120/);
 		assert.match(body, /\+20\.00%/);
@@ -155,6 +175,17 @@ test('dashboard renders useful loading, backend-error and section-level empty st
 			props: {
 				dashboard: {
 					account: { balance: 0, change: 0, period: 'Last 24 hours' },
+					wagering: {
+						count: 0,
+						open: 0,
+						wins: 0,
+						losses: 0,
+						refunds: 0,
+						totalStaked: 0,
+						totalPayout: 0,
+						profit: 0
+					},
+					trading: { trades: 0, buys: 0, sells: 0 },
 					portfolio: {
 						costBasis: 0,
 						marketValue: 0,
