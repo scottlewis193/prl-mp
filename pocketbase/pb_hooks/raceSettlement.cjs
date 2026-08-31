@@ -23,9 +23,6 @@ function buildRaceSettlement({ raceId, participants, prizeCurve }) {
 
 	const finishers = orderRaceFinishers(participants);
 	const completedAt = finishers[finishers.length - 1].finishedAt;
-	const rankingSlots = participants
-		.map((racer) => racer.stats.ranking)
-		.sort((left, right) => left - right);
 	const racers = finishers.map((racer, index) => {
 		if (racer.raceHistory.races.some((result) => result.raceId === raceId)) {
 			throw new Error(`Race ${raceId} is already present in racer ${racer.id} history`);
@@ -42,7 +39,7 @@ function buildRaceSettlement({ raceId, participants, prizeCurve }) {
 		return {
 			id: racer.id,
 			race: '',
-			stats: { ...racer.stats, ranking: rankingSlots[index] },
+			stats: { ...racer.stats },
 			raceHistory: {
 				wins: racer.raceHistory.wins + (position === 1 ? 1 : 0),
 				totalRaces,

@@ -48,7 +48,22 @@ test('authenticated dashboard repository aggregates the player account and live 
 				}
 			],
 			races: [],
-			racetracks: []
+			racetracks: [],
+			seasons: [{ id: 'season-1', name: 'Season 1', status: 'active', movementCount: 1 }],
+			leagues: [{ id: 'league-1', name: 'Starter League', minRanking: 1, maxPlayers: 1 }],
+			leagueStandings: [
+				{
+					season: 'season-1',
+					league: 'league-1',
+					racer: 'racer-1',
+					points: 25,
+					starts: 1,
+					wins: 1,
+					podiums: 1,
+					bestFinish: 1,
+					recentForm: [1]
+				}
+			]
 		}) as never,
 		{ id: 'player-1', balance: 250, watchlist: ['racer-1'] }
 	);
@@ -79,6 +94,27 @@ test('authenticated dashboard repository aggregates the player account and live 
 			marketValue: 50,
 			gain: 10,
 			gainPercent: 25
+		}
+	]);
+	assert.deepEqual(result.leagueTables, [
+		{
+			leagueId: 'league-1',
+			leagueName: 'Starter League',
+			seasonName: 'Season 1',
+			rows: [
+				{
+					position: 1,
+					racerId: 'racer-1',
+					racerName: 'Bolt',
+					points: 25,
+					starts: 1,
+					wins: 1,
+					podiums: 1,
+					bestFinish: 1,
+					recentForm: [1],
+					movementZone: 'safe'
+				}
+			]
 		}
 	]);
 });

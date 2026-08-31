@@ -292,6 +292,89 @@ routerAdd(
 				throw e.badRequestError(error.message, {});
 			}
 
+			let raceFormat = {};
+			try {
+				raceFormat = JSON.parse(toString(race.get('raceFormat'))) || {};
+			} catch {
+				raceFormat = {};
+			}
+			const seasonPointFacts = [];
+			let awardedPoints;
+			try {
+				awardedPoints = require(`${__hooks}/leagueStandings.cjs`).pointsForRaceSettlement(
+					raceFormat,
+					(() => {
+						try {
+							return JSON.parse(toString(race.get('pointsCurve')));
+						} catch {
+							return [];
+						}
+					})(),
+					plan.race.finishingOrder.length
+				);
+			} catch (error) {
+				throw e.badRequestError(error.message, {});
+			}
+			if (awardedPoints) {
+				const seasonId = race.getString('season');
+				const leagueId = race.getString('league');
+				if (!seasonId || !leagueId) {
+					throw e.badRequestError('A ranked League Race requires season and points snapshots.', {});
+				}
+
+				const standingCollection = txApp.findCollectionByNameOrId('leagueStandings');
+				const standingsRules = require(`${__hooks}/leagueStandings.cjs`);
+				for (let index = 0; index < plan.race.finishingOrder.length; index += 1) {
+					const racerId = plan.race.finishingOrder[index];
+					let standing;
+					try {
+						standing = txApp.findFirstRecordByFilter(
+							'leagueStandings',
+							'season = {:seasonId} && racer = {:racerId}',
+							{ seasonId, racerId }
+						);
+					} catch {
+						standing = new Record(standingCollection);
+						standing.set('season', seasonId);
+						standing.set('league', leagueId);
+						standing.set('racer', racerId);
+					}
+					const projected = standingsRules.applyLeagueRaceResult(
+						{
+							racerId,
+							points: standing.getFloat('points'),
+							starts: standing.getInt('starts'),
+							wins: standing.getInt('wins'),
+							podiums: standing.getInt('podiums'),
+							bestFinish: standing.getInt('bestFinish'),
+							recentForm: (() => {
+								try {
+									return JSON.parse(toString(standing.get('recentForm'))) || [];
+								} catch {
+									return [];
+								}
+							})()
+						},
+						{ position: index + 1, points: awardedPoints[index] }
+					);
+					standing.set('league', leagueId);
+					standing.set('points', projected.points);
+					standing.set('starts', projected.starts);
+					standing.set('wins', projected.wins);
+					standing.set('podiums', projected.podiums);
+					standing.set('bestFinish', projected.bestFinish);
+					standing.set('recentForm', projected.recentForm);
+					standing.set('updatedAt', plan.race.endTime);
+					txApp.save(standing);
+					seasonPointFacts.push({
+						standingId: standing.id,
+						racerId,
+						position: index + 1,
+						points: awardedPoints[index]
+					});
+				}
+			}
+
 			for (const update of plan.racers) {
 				const racer = racerById[update.id];
 				racer.set('race', null);
@@ -356,7 +439,8 @@ routerAdd(
 				winnerId: plan.race.winner,
 				finishingOrder: plan.race.finishingOrder,
 				awardedPrizes: plan.race.awardedPrizes,
-				trainerResults: trainerResultFacts
+				trainerResults: trainerResultFacts,
+				seasonPoints: seasonPointFacts
 			});
 			txApp.save(settlementEvent);
 			settled = true;

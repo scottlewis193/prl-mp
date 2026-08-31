@@ -56,7 +56,7 @@ test('builds progression and configured rewards for every finisher', () => {
 			{
 				id: 'racer-a',
 				race: '',
-				ranking: 7,
+				ranking: 12,
 				history: {
 					wins: 1,
 					totalRaces: 1,
@@ -76,7 +76,7 @@ test('builds progression and configured rewards for every finisher', () => {
 			{
 				id: 'racer-b',
 				race: '',
-				ranking: 12,
+				ranking: 7,
 				history: {
 					wins: 1,
 					totalRaces: 3,

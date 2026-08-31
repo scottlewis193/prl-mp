@@ -9,16 +9,25 @@ export type { RaceFormat } from './raceFormat';
 
 export type AwardedPrize = { racerId: string; position: number; amount: number };
 
+export type RaceCompetitionFormat = {
+	type: 'league_race' | 'grand_prix' | 'exhibition' | 'legends_exhibition';
+	ranked: boolean;
+	rulesVersion: string;
+};
+
 export type RaceType = {
 	id?: string;
 	name: string;
 	status: 'pending' | 'countdown' | 'running' | 'finished' | 'cancelled' | 'settled';
 	league?: string;
+	season?: string;
 	format?: RaceFormat;
+	raceFormat?: RaceCompetitionFormat;
 	racetrack: string;
 	winner: string;
 	finishingOrder: string[];
 	prizeCurve?: number[];
+	pointsCurve?: number[];
 	awardedPrizes?: AwardedPrize[];
 	startTime: Date;
 	endTime: Date;
@@ -37,11 +46,14 @@ export class Race implements RaceType {
 	name: string = 'New Race';
 	status: 'pending' | 'countdown' | 'running' | 'finished' | 'cancelled' | 'settled' = 'pending';
 	league?: string;
+	season?: string;
 	format?: RaceFormat;
+	raceFormat?: RaceCompetitionFormat;
 	racetrack: string = '175hl67e5pvjjib';
 	winner: string = '';
 	finishingOrder: string[] = [];
 	prizeCurve?: number[] = [];
+	pointsCurve?: number[] = [];
 	awardedPrizes?: AwardedPrize[] = [];
 	startTime: Date = new Date();
 	totalLaps: number = 99;
@@ -568,10 +580,36 @@ export type EventType = {
 		winnerId: string;
 		finishingOrder: string[];
 		awardedPrizes: AwardedPrize[];
+		seasonPoints?: { racerId: string; position: number; points: number }[];
 	};
 	raceIds: string[];
 	started: boolean;
 	finished: boolean;
+};
+
+export type Season = {
+	id: string;
+	name: string;
+	status: 'active' | 'completed';
+	startedAt: string;
+	endedAt?: string;
+	rulesVersion: string;
+	pointsCurve: number[];
+	movementCount: number;
+};
+
+export type LeagueStandingRecord = {
+	id: string;
+	season: string;
+	league: string;
+	racer: string;
+	points: number;
+	starts: number;
+	wins: number;
+	podiums: number;
+	bestFinish: number;
+	recentForm: number[];
+	updatedAt?: string;
 };
 
 export type ExchangePage = {

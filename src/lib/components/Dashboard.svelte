@@ -37,6 +37,10 @@
 	function countLabel(count: number, singular: string): string {
 		return `${count.toLocaleString()} ${singular}${count === 1 ? '' : 's'}`;
 	}
+
+	function movementLabel(zone: 'promotion' | 'relegation' | 'safe'): string {
+		return zone === 'promotion' ? 'Promotion' : zone === 'relegation' ? 'Relegation' : 'Safe';
+	}
 </script>
 
 {#if loading}
@@ -161,6 +165,63 @@
 								{/each}
 							</tbody>
 						</table>
+					</div>
+				{/if}
+			</div>
+		</section>
+
+		<section class="card card-border bg-base-200 lg:col-span-2 xl:col-span-3">
+			<div class="card-body">
+				<h2 class="card-title">
+					{dashboard.leagueTables?.[0]?.seasonName ?? 'Current season'} standings
+				</h2>
+				{#if !dashboard.leagueTables || dashboard.leagueTables.length === 0}
+					<p class="text-base-content/70">No active league tables are available.</p>
+				{:else}
+					<div class="grid gap-4 xl:grid-cols-2">
+						{#each dashboard.leagueTables as table (table.leagueId)}
+							<section class="border-base-300 rounded-box overflow-hidden border">
+								<h3 class="bg-base-300 px-4 py-3 text-lg font-semibold">{table.leagueName}</h3>
+								<div class="overflow-x-auto">
+									<table class="table-sm table">
+										<thead>
+											<tr>
+												<th>Position</th>
+												<th>Racer</th>
+												<th>Points</th>
+												<th>Starts</th>
+												<th>Wins</th>
+												<th>Podiums</th>
+												<th>Best</th>
+												<th>Recent form</th>
+												<th>Movement</th>
+											</tr>
+										</thead>
+										<tbody>
+											{#each table.rows as row (row.racerId)}
+												<tr
+													class={row.movementZone === 'promotion'
+														? 'bg-success/10'
+														: row.movementZone === 'relegation'
+															? 'bg-error/10'
+															: ''}
+												>
+													<td>{row.position}</td>
+													<td class="font-semibold">{row.racerName}</td>
+													<td>{row.points}</td>
+													<td>{row.starts}</td>
+													<td>{row.wins}</td>
+													<td>{row.podiums}</td>
+													<td>{row.bestFinish || '—'}</td>
+													<td>{row.recentForm.length > 0 ? row.recentForm.join(' · ') : '—'}</td>
+													<td>{movementLabel(row.movementZone)}</td>
+												</tr>
+											{/each}
+										</tbody>
+									</table>
+								</div>
+							</section>
+						{/each}
 					</div>
 				{/if}
 			</div>

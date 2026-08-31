@@ -128,6 +128,39 @@ const populatedDashboard = {
 			description: 'Price moved to ₽12 · Race win',
 			timestamp: '2026-08-15T11:30:00Z'
 		}
+	],
+	leagueTables: [
+		{
+			leagueId: 'league-1',
+			leagueName: 'Starter League',
+			seasonName: 'Season 1',
+			rows: [
+				{
+					position: 1,
+					racerId: 'racer-1',
+					racerName: 'Bolt',
+					points: 25,
+					starts: 2,
+					wins: 1,
+					podiums: 2,
+					bestFinish: 1,
+					recentForm: [1, 2],
+					movementZone: 'promotion' as const
+				},
+				{
+					position: 2,
+					racerId: 'racer-2',
+					racerName: 'Dash',
+					points: 18,
+					starts: 2,
+					wins: 0,
+					podiums: 1,
+					bestFinish: 2,
+					recentForm: [2, 4],
+					movementZone: 'relegation' as const
+				}
+			]
+		}
 	]
 };
 
@@ -156,6 +189,11 @@ test('dashboard renders live account, holdings, race and watched-racer informati
 		assert.match(body, /Indigo Cup/);
 		assert.match(body, /Winner: Bolt/);
 		assert.match(body, /Price moved to ₽12 · Race win/);
+		assert.match(body, /Season 1 standings/i);
+		assert.match(body, /Starter League/);
+		assert.match(body, /Position.*Points.*Starts.*Wins.*Podiums.*Best.*Recent form.*Movement/is);
+		assert.match(body, /Bolt.*25.*2.*1.*2.*1.*1.*2.*Promotion/is);
+		assert.match(body, /Dash.*18.*2.*0.*1.*2.*2.*4.*Relegation/is);
 		assert.doesNotMatch(body, /Send Test Notification|Avatar Tailwind|>Test</);
 	} finally {
 		await cleanup();
@@ -195,7 +233,8 @@ test('dashboard renders useful loading, backend-error and section-level empty st
 					},
 					upcomingRaces: [],
 					recentResults: [],
-					watchedActivity: []
+					watchedActivity: [],
+					leagueTables: []
 				}
 			}
 		}).body;
@@ -203,6 +242,7 @@ test('dashboard renders useful loading, backend-error and section-level empty st
 		assert.match(empty, /No upcoming races are scheduled/i);
 		assert.match(empty, /No recent results yet/i);
 		assert.match(empty, /No watched-racer activity yet/i);
+		assert.match(empty, /No active league tables are available/i);
 	} finally {
 		await cleanup();
 	}

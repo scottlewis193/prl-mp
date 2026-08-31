@@ -526,7 +526,7 @@ test('settles a finished race atomically and remains unchanged when settlement i
 			prizeMoney: index + 1,
 			totalRaces: 1,
 			wins: index === racers.length - 1 ? 1 : 0,
-			ranking: racers.length - index,
+			ranking: index + 1,
 			totalEarnings: index + 1,
 			averageFinishPosition: racers.length - index
 		}))
@@ -796,7 +796,7 @@ test('maintains the configured event pipeline without duplicate or overlapping a
 	assert.deepEqual(firstRun, {
 		createdEvents: 2,
 		createdRaces: 2,
-		assignedRacers: 7,
+		assignedRacers: 6,
 		transitionedRaces: 0
 	});
 
@@ -814,10 +814,7 @@ test('maintains the configured event pipeline without duplicate or overlapping a
 		sort: 'startTime'
 	});
 	const racers = await firstWorker.collection('racers').getFullList();
-	assert.deepEqual(
-		racers.find((racer) => racer.id === entryUntrainedRacer.id)?.currentRace.trainerAtEntry,
-		{ status: 'untrained' }
-	);
+	assert.equal(racers.find((racer) => racer.id === entryUntrainedRacer.id)?.race, '');
 	await firstWorker.collection('racers').update(entryUntrainedRacer.id, {
 		trainer: entryUntrainedOriginalTrainer
 	});
@@ -858,22 +855,20 @@ test('maintains the configured event pipeline without duplicate or overlapping a
 		races.map((race) => race.prizeCurve),
 		[
 			[4, 3, 2, 1],
-			[3, 2, 1]
+			[4, 3, 2, 1]
 		]
 	);
 	assert.deepEqual(
 		races.map((race) => racers.filter((racer) => racer.race === race.id).length),
-		[4, 3]
+		[4, 2]
 	);
 	assert.equal(
-		races.every(
-			(race) => race.prizeCurve.length === racers.filter((racer) => racer.race === race.id).length
-		),
+		races.every((race) => race.prizeCurve.length === 4),
 		true
 	);
 	assert.equal(
 		racers
-			.filter((racer) => !racer.status.injured && !racer.status.retired)
+			.filter((racer) => !racer.status.injured && !racer.status.retired && racer.trainer)
 			.every((racer) => races.some((race) => race.id === racer.race)),
 		true
 	);

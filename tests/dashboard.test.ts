@@ -193,3 +193,144 @@ test('portfolio totals preserve all invested cost and do not claim a complete re
 	assert.equal(dashboard.portfolio.gain, null);
 	assert.equal(dashboard.portfolio.gainPercent, null);
 });
+
+test('dashboard builds every league table with deterministic positions and movement zones', () => {
+	const dashboard = aggregateDashboard({
+		balance: 0,
+		ledger: [],
+		wagers: [],
+		holdings: [],
+		racers: [
+			{ id: 'racer-a', name: 'Alpha' },
+			{ id: 'racer-b', name: 'Beta' },
+			{ id: 'racer-c', name: 'Comet' },
+			{ id: 'racer-d', name: 'Dash' }
+		],
+		races: [],
+		racetracks: [],
+		watchlist: [],
+		seasons: [
+			{
+				id: 'season-1',
+				name: 'Season 1',
+				status: 'active',
+				movementCount: 1
+			}
+		],
+		leagues: [
+			{ id: 'league-top', name: 'Premier League', minRanking: 1, maxPlayers: 2 },
+			{ id: 'league-lower', name: 'Challenger League', minRanking: 3, maxPlayers: 2 }
+		],
+		standings: [
+			{
+				season: 'season-1',
+				league: 'league-top',
+				racer: 'racer-b',
+				points: 30,
+				starts: 2,
+				wins: 1,
+				podiums: 1,
+				bestFinish: 1,
+				recentForm: [1, 4]
+			},
+			{
+				season: 'season-1',
+				league: 'league-top',
+				racer: 'racer-a',
+				points: 30,
+				starts: 2,
+				wins: 1,
+				podiums: 1,
+				bestFinish: 1,
+				recentForm: [2, 1]
+			},
+			{
+				season: 'season-1',
+				league: 'league-lower',
+				racer: 'racer-c',
+				points: 18,
+				starts: 1,
+				wins: 0,
+				podiums: 1,
+				bestFinish: 2,
+				recentForm: [2]
+			},
+			{
+				season: 'season-1',
+				league: 'league-lower',
+				racer: 'racer-d',
+				points: 10,
+				starts: 1,
+				wins: 0,
+				podiums: 0,
+				bestFinish: 5,
+				recentForm: [5]
+			}
+		]
+	});
+
+	assert.deepEqual(dashboard.leagueTables, [
+		{
+			leagueId: 'league-top',
+			leagueName: 'Premier League',
+			seasonName: 'Season 1',
+			rows: [
+				{
+					position: 1,
+					racerId: 'racer-a',
+					racerName: 'Alpha',
+					points: 30,
+					starts: 2,
+					wins: 1,
+					podiums: 1,
+					bestFinish: 1,
+					recentForm: [2, 1],
+					movementZone: 'safe'
+				},
+				{
+					position: 2,
+					racerId: 'racer-b',
+					racerName: 'Beta',
+					points: 30,
+					starts: 2,
+					wins: 1,
+					podiums: 1,
+					bestFinish: 1,
+					recentForm: [1, 4],
+					movementZone: 'relegation'
+				}
+			]
+		},
+		{
+			leagueId: 'league-lower',
+			leagueName: 'Challenger League',
+			seasonName: 'Season 1',
+			rows: [
+				{
+					position: 1,
+					racerId: 'racer-c',
+					racerName: 'Comet',
+					points: 18,
+					starts: 1,
+					wins: 0,
+					podiums: 1,
+					bestFinish: 2,
+					recentForm: [2],
+					movementZone: 'promotion'
+				},
+				{
+					position: 2,
+					racerId: 'racer-d',
+					racerName: 'Dash',
+					points: 10,
+					starts: 1,
+					wins: 0,
+					podiums: 0,
+					bestFinish: 5,
+					recentForm: [5],
+					movementZone: 'safe'
+				}
+			]
+		}
+	]);
+});

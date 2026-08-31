@@ -46,6 +46,44 @@ routerAdd(
 				Array.from({ length: places }, (_, index) => (places - index) * safeScale)
 			);
 		};
+		const snapshotLeagueRace = (race, season) => {
+			const configuredCurve = JSON.parse(toString(season.get('pointsCurve')) || '[]');
+			if (
+				!Array.isArray(configuredCurve) ||
+				configuredCurve.some((points) => !Number.isFinite(Number(points)) || Number(points) < 0)
+			) {
+				throw new Error(`Season ${season.id} has an invalid points curve.`);
+			}
+			race.set('season', season.id);
+			race.set('raceFormat', {
+				type: 'league_race',
+				ranked: true,
+				rulesVersion: season.getString('rulesVersion')
+			});
+			race.set('pointsCurve', configuredCurve.map(Number));
+		};
+		const ensureSeasonStanding = (txApp, seasonId, racer) => {
+			try {
+				txApp.findFirstRecordByFilter(
+					'leagueStandings',
+					'season = {:seasonId} && racer = {:racerId}',
+					{ seasonId, racerId: racer.id }
+				);
+				return;
+			} catch {
+				const standing = new Record(txApp.findCollectionByNameOrId('leagueStandings'));
+				standing.set('season', seasonId);
+				standing.set('league', racer.getString('league'));
+				standing.set('racer', racer.id);
+				standing.set('points', 0);
+				standing.set('starts', 0);
+				standing.set('wins', 0);
+				standing.set('podiums', 0);
+				standing.set('bestFinish', 0);
+				standing.set('recentForm', []);
+				txApp.save(standing);
+			}
+		};
 		const snapshotTrainerEntry = (racer) => {
 			let currentRace = {};
 			try {
@@ -103,6 +141,14 @@ routerAdd(
 
 		try {
 			e.app.runInTransaction((txApp) => {
+				const activeSeasons = txApp.findRecordsByFilter('seasons', 'status = "active"', 'id', 2, 0);
+				if (activeSeasons.length !== 1) {
+					throw e.badRequestError(
+						'Exactly one active season is required to schedule League Races.',
+						{}
+					);
+				}
+				const activeSeason = activeSeasons[0];
 				const events = txApp
 					.findAllRecords('events')
 					.filter((event) => !event.getBool('finished'))
@@ -116,12 +162,15 @@ routerAdd(
 				const leagues = txApp.findRecordsByFilter('leagues', 'id != ""', 'minRanking,id', 1000, 0);
 				const leagueById = {};
 				for (const league of leagues) leagueById[league.id] = league;
-				const availableRacers = txApp
-					.findRecordsByFilter('racers', 'race = ""', 'id', 5000, 0)
+				const leagueRacers = txApp
+					.findRecordsByFilter('racers', 'league != "" && trainer != ""', 'id', 5000, 0)
 					.filter((racer) => {
 						const status = schedulerStatus(racer);
-						return !status.retired && !status.injured;
-					})
+						return !status.retired;
+					});
+				for (const racer of leagueRacers) ensureSeasonStanding(txApp, activeSeason.id, racer);
+				const availableRacers = leagueRacers
+					.filter((racer) => !racer.getString('race') && !schedulerStatus(racer).injured)
 					.map((racer) => ({ racer, ranking: schedulerRanking(racer) }))
 					.sort(
 						(left, right) =>
@@ -173,15 +222,6 @@ routerAdd(
 									txApp.save(racer);
 									scheduledRacers.push(racer);
 									result.assignedRacers += 1;
-								}
-								if (backfill.length > 0) {
-									const storedCurve = JSON.parse(toString(race.get('prizeCurve')));
-									const snapshottedScale =
-										storedCurve.length > 0
-											? storedCurve[storedCurve.length - 1]
-											: league.getFloat('prizeMoneyScaling');
-									snapshotPrizeCurve(race, scheduledRacers.length, snapshottedScale);
-									txApp.save(race);
 								}
 							}
 							if (scheduledRacers.length >= 2) {
@@ -309,7 +349,8 @@ routerAdd(
 						race.set('racetrack', selectedTrack.id);
 						race.set('startTime', new Date(slotMs).toISOString());
 						race.set('totalLaps', totalLaps);
-						snapshotPrizeCurve(race, selected.length, league.getFloat('prizeMoneyScaling'));
+						snapshotLeagueRace(race, activeSeason);
+						snapshotPrizeCurve(race, capacity, league.getFloat('prizeMoneyScaling'));
 						exposeWinnerMarket(race, selected, new Date(slotMs).toISOString());
 						txApp.save(race);
 						raceIds.push(race.id);

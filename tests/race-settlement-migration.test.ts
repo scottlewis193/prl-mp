@@ -141,7 +141,7 @@ test('migration reconstructs settled awards and freezes only unsettled legacy pr
 		assert.deepEqual(await client.collection('trainerChampionships').getFullList(), []);
 		assert.deepEqual(
 			(await client.collection('races').getOne(pendingRace.id)).prizeCurve,
-			[6, 4, 2]
+			[16, 14, 12, 10, 8, 6, 4, 2]
 		);
 		assert.deepEqual(
 			(await client.collection('racers').getOne(racers[2].id)).currentRace.trainerAtEntry,
@@ -151,7 +151,7 @@ test('migration reconstructs settled awards and freezes only unsettled legacy pr
 		await client.collection('leagues').update('prlseeddemo0001', { prizeMoneyScaling: 100 });
 		assert.deepEqual(
 			(await client.collection('races').getOne(pendingRace.id)).prizeCurve,
-			[6, 4, 2]
+			[16, 14, 12, 10, 8, 6, 4, 2]
 		);
 	} finally {
 		if (server) await stopPocketBase(server);

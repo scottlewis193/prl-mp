@@ -1,0 +1,22 @@
+export type LeagueStanding = {
+	racerId: string;
+	points: number;
+	starts: number;
+	wins: number;
+	podiums: number;
+	bestFinish: number;
+	recentForm: number[];
+};
+
+export function applyLeagueRaceResult(
+	standing: LeagueStanding,
+	result: { position: number; points: number }
+): LeagueStanding;
+
+export function orderLeagueStandings(standings: LeagueStanding[]): LeagueStanding[];
+
+export function pointsForRaceSettlement(
+	raceFormat: { type?: string; ranked?: boolean; rulesVersion?: string } | undefined,
+	pointsCurve: number[],
+	finisherCount: number
+): number[] | null;
