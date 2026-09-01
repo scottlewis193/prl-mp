@@ -14,7 +14,7 @@ declare const news: {
 		category: 'retirement';
 		importance: number;
 		publishedAt: string;
-		templateVersion: 'retirement-story-v1';
+		templateVersion: 'retirement-story-v2';
 		links: Array<{ kind: 'racer' | 'trainer' | 'league'; id: string; label: string; href: string }>;
 	};
 };

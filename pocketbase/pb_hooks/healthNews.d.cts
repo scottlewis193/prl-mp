@@ -23,7 +23,7 @@ declare const healthNews: {
 		category: 'health_onset' | 'health_recovery';
 		importance: number;
 		publishedAt: string;
-		templateVersion: 'health-story-v1';
+		templateVersion: 'health-story-v2';
 		links: Array<{
 			kind: 'racer' | 'trainer' | 'league';
 			id: string;

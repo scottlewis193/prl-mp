@@ -336,6 +336,9 @@ routerAdd(
 					outcome: durableRaceState.outcome || 'finished',
 					finishedAt: currentRace.finishedAt || currentRace.lastUpdatedAt,
 					incident: durableRaceState.incident,
+					significantEvents: Array.isArray(durableRaceState.significantEvents)
+						? durableRaceState.significantEvents
+						: [],
 					stats: {
 						hp: stats.hp,
 						attack: stats.attack,
@@ -626,7 +629,32 @@ routerAdd(
 					return { id: trainerId, name: trainer.getString('name') };
 				}),
 				league: { id: leagueId, name: league.getString('name') },
-				track: { id: trackId, name: track.getString('name') }
+				track: { id: trackId, name: track.getString('name') },
+				winnerCareer: (() => {
+					const winnerUpdate = plan.racers.find((update) => update.id === plan.race.winner);
+					return winnerUpdate
+						? {
+								wins: winnerUpdate.raceHistory.wins,
+								starts: winnerUpdate.raceHistory.totalRaces
+							}
+						: undefined;
+				})(),
+				notableTactics: (() => {
+					const unique = {};
+					for (const participant of participants) {
+						for (const event of participant.significantEvents || []) {
+							if (event?.id && event?.summary) unique[event.id] = event;
+						}
+					}
+					return Object.values(unique)
+						.sort((left, right) =>
+							left.occurredAt === right.occurredAt
+								? left.id.localeCompare(right.id)
+								: String(left.occurredAt).localeCompare(String(right.occurredAt))
+						)
+						.slice(-3)
+						.map((event) => ({ id: event.id, summary: event.summary }));
+				})()
 			};
 			settlementEvent.set('facts', {
 				raceId,

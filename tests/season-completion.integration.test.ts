@@ -151,6 +151,20 @@ test(
 			assert.equal(completion.seasonId, season.id);
 			assert.equal(completion.movements, 16);
 			assert.equal(completion.awards, 3);
+			const completionEvents = await client.collection('events').getFullList({
+				filter: `type = "SeasonCompleted"`
+			});
+			assert.equal(completionEvents.length, 1);
+			assert.equal(completionEvents[0]?.idempotencyKey, `season-completed:${season.id}`);
+			const seasonStories = await client.collection('news').getFullList({
+				filter: `sourceEvent = "${completionEvents[0]?.id}"`
+			});
+			assert.equal(seasonStories.length, 1);
+			assert.equal(seasonStories[0]?.category, 'season_update');
+			assert.equal(seasonStories[0]?.importance, 95);
+			assert.equal(seasonStories[0]?.templateVersion, 'season-story-v1');
+			assert.match(seasonStories[0]?.summary ?? '', /promoted.*relegated/is);
+			const storedSeasonStory = JSON.stringify(seasonStories[0]);
 
 			const completedSeason = await client.collection('seasons').getOne(season.id);
 			assert.equal(completedSeason.status, 'completed');
@@ -254,6 +268,16 @@ test(
 			assert.equal((await client.collection('leagueMovements').getFullList()).length, 16);
 			assert.equal((await client.collection('seasonAwards').getFullList()).length, 3);
 			assert.equal((await client.collection('trainerChampionships').getFullList()).length, 3);
+			assert.equal(
+				JSON.stringify(
+					(
+						await client.collection('news').getFullList({
+							filter: `sourceEvent = "${completionEvents[0]?.id}"`
+						})
+					)[0]
+				),
+				storedSeasonStory
+			);
 		} finally {
 			if (server) await stopPocketBase(server);
 			await rm(dataDirectory, { recursive: true, force: true });

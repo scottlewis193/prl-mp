@@ -191,7 +191,7 @@ test('roster news states only the recorded signing facts', () => {
 			category: 'signing',
 			importance: 60,
 			publishedAt: '2026-09-01T00:00:00.000Z',
-			templateVersion: 'roster-story-v1',
+			templateVersion: 'roster-story-v2',
 			links: [
 				{ kind: 'racer', id: 'racer-pika', label: 'Bolt', href: '/exchange' },
 				{ kind: 'trainer', id: 'trainer-misty', label: 'Misty', href: '/trainers' },

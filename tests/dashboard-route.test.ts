@@ -174,6 +174,39 @@ test('dashboard repository exposes a filtered, paginated importance-ordered news
 	]);
 });
 
+test('dashboard repository filters the news desk by multi-category desks', async () => {
+	const calls: unknown[] = [];
+	const client = dashboardClient({ news: [] });
+	const originalCollection = client.collection.bind(client);
+	client.collection = ((name: string) => {
+		const collection = originalCollection(name);
+		if (name !== 'news') return collection;
+		const originalGetList = collection.getList;
+		collection.getList = async (...args: [number, number?, unknown?]) => {
+			calls.push(args);
+			return originalGetList(...args);
+		};
+		return collection;
+	}) as never;
+
+	const result = await loadDashboard(
+		client as never,
+		{ id: 'player-1', balance: 0, watchlist: [] },
+		{ newsCategory: 'health' }
+	);
+
+	assert.equal(result.news.category, 'health');
+	assert.deepEqual(calls.at(-1), [
+		1,
+		5,
+		{
+			sort: '-importance,-publishedAt,-id',
+			filter: 'category = "health_onset" || category = "health_recovery"',
+			fields: 'id,headline,summary,category,importance,publishedAt,links'
+		}
+	]);
+});
+
 test('dashboard repository exposes backend failures to the server loader', async () => {
 	await assert.rejects(
 		() =>

@@ -101,6 +101,7 @@ routerAdd(
 				const awardCollection = txApp.findCollectionByNameOrId('seasonAwards');
 				const championshipCollection = txApp.findCollectionByNameOrId('trainerChampionships');
 				const championshipTrainerIds = {};
+				const championFacts = [];
 				let awards = 0;
 				for (const league of leagues) {
 					const championStanding = (orderedByLeague[league.id] || [])[0];
@@ -129,6 +130,11 @@ routerAdd(
 						txApp.save(championship);
 						championshipTrainerIds[trainerId] = true;
 					}
+					championFacts.push({
+						racer: { id: racer.id, name: racer.getString('name') },
+						league: { id: league.id, name: league.getString('name') },
+						trainerId: trainerId || null
+					});
 					awards += 1;
 				}
 
@@ -222,6 +228,61 @@ routerAdd(
 				for (const trainerId of Object.keys(championshipTrainerIds)) {
 					require(`${__hooks}/trainerCareer.cjs`).rebuildTrainerCareer(txApp, trainerId);
 				}
+
+				const leagueById = {};
+				for (const league of leagues) leagueById[league.id] = league;
+				const movementFacts = plannedMovements.map((movement) => ({
+					racer: {
+						id: movement.racerId,
+						name: racerById[movement.racerId].getString('name')
+					},
+					fromLeague: {
+						id: movement.fromLeague,
+						name: leagueById[movement.fromLeague].getString('name')
+					},
+					toLeague: {
+						id: movement.toLeague,
+						name: leagueById[movement.toLeague].getString('name')
+					},
+					direction: movement.direction
+				}));
+				const completionEvent = new Record(txApp.findCollectionByNameOrId('events'));
+				completionEvent.set('type', 'SeasonCompleted');
+				completionEvent.set('idempotencyKey', `season-completed:${season.id}`);
+				completionEvent.set('occurredAt', completedAt);
+				completionEvent.set('started', true);
+				completionEvent.set('finished', true);
+				completionEvent.set('facts', {
+					season: { id: season.id, name: season.getString('name') },
+					champions: championFacts,
+					movements: movementFacts
+				});
+				txApp.save(completionEvent);
+
+				const story = require(`${__hooks}/seasonNews.cjs`).buildSeasonStory({
+					eventId: completionEvent.id,
+					occurredAt: completedAt,
+					season: { id: season.id, name: season.getString('name') },
+					champions: championFacts,
+					movements: movementFacts
+				});
+				const news = new Record(txApp.findCollectionByNameOrId('news'));
+				news.set('sourceEvent', completionEvent.id);
+				news.set('racers', [
+					...new Set([
+						...championFacts.map((champion) => champion.racer.id),
+						...movementFacts.map((movement) => movement.racer.id)
+					])
+				]);
+				news.set('trainers', Object.keys(championshipTrainerIds));
+				news.set('category', story.category);
+				news.set('importance', story.importance);
+				news.set('publishedAt', story.publishedAt);
+				news.set('headline', story.headline);
+				news.set('summary', story.summary);
+				news.set('templateVersion', story.templateVersion);
+				news.set('links', story.links);
+				txApp.save(news);
 
 				result = {
 					completed: true,

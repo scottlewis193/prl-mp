@@ -1,11 +1,4 @@
-function stableTemplateIndex(value, templateCount) {
-	let hash = 2166136261;
-	for (let index = 0; index < value.length; index += 1) {
-		hash ^= value.charCodeAt(index);
-		hash = Math.imul(hash, 16777619);
-	}
-	return (hash >>> 0) % templateCount;
-}
+const { stableTemplateIndex } = require('./newsTemplates.cjs');
 
 function buildRaceResultStory(facts) {
 	if (!facts.eventId || !facts.occurredAt) throw new Error('Race news requires a source event');
@@ -36,7 +29,7 @@ function buildRaceResultStory(facts) {
 			category: 'race_result',
 			importance: 85,
 			publishedAt: facts.occurredAt,
-			templateVersion: 'race-result-v2',
+			templateVersion: 'race-result-v3',
 			links: [
 				{
 					kind: 'race',
@@ -75,21 +68,31 @@ function buildRaceResultStory(facts) {
 	const marketText = winnerMovement
 		? ` The market repriced the field after the result, moving ${facts.winner.name} from ₽${winnerMovement.previousPrice.toFixed(2)} to ₽${winnerMovement.price.toFixed(2)}.`
 		: '';
+	const careerText = facts.winnerCareer
+		? ` ${facts.winner.name}'s career record now stands at ${facts.winnerCareer.wins} wins from ${facts.winnerCareer.starts} starts.`
+		: '';
 	const incidentText = nonFinishers.length
 		? ` ${nonFinishers.map((racer) => racer.summary || `${racer.name} did not finish (${racer.reason}).`).join(' ')}`
 		: '';
+	const tacticsText =
+		Array.isArray(facts.notableTactics) && facts.notableTactics.length
+			? ` Notable tactics: ${facts.notableTactics
+					.map((event) => event.summary)
+					.filter(Boolean)
+					.join(' ')}`
+			: '';
 	const templates = [
 		{
 			headline: `${facts.winner.name} wins ${facts.race.name}`,
-			summary: `${facts.winner.name} took victory in ${facts.race.name} at ${facts.track.name}${leagueText}; ${fieldText}.${incidentText}${formatText}${marketText}`
+			summary: `${facts.winner.name} took victory in ${facts.race.name} at ${facts.track.name}${leagueText}; ${fieldText}.${incidentText}${formatText}${careerText}${marketText}${tacticsText}`
 		},
 		{
 			headline: `${facts.race.name} belongs to ${facts.winner.name}`,
-			summary: `At ${facts.track.name}, ${facts.winner.name} won ${facts.race.name}${leagueText}; ${fieldText}.${incidentText}${formatText}${marketText}`
+			summary: `At ${facts.track.name}, ${facts.winner.name} won ${facts.race.name}${leagueText}; ${fieldText}.${incidentText}${formatText}${careerText}${marketText}${tacticsText}`
 		},
 		{
 			headline: `${facts.winner.name} takes the chequered flag`,
-			summary: `${facts.race.name} ended with ${facts.winner.name} first at ${facts.track.name}${leagueText}; ${fieldText}.${incidentText}${formatText}${marketText}`
+			summary: `${facts.race.name} ended with ${facts.winner.name} first at ${facts.track.name}${leagueText}; ${fieldText}.${incidentText}${formatText}${careerText}${marketText}${tacticsText}`
 		}
 	];
 	const selected = templates[stableTemplateIndex(facts.eventId, templates.length)];
@@ -120,9 +123,14 @@ function buildRaceResultStory(facts) {
 	return {
 		...selected,
 		category: 'race_result',
-		importance: 70,
+		importance:
+			facts.race.format === 'grand_prix'
+				? 90
+				: facts.race.format === 'legends_exhibition' || nonFinishers.length
+					? 85
+					: 70,
 		publishedAt: facts.occurredAt,
-		templateVersion: 'race-result-v2',
+		templateVersion: 'race-result-v3',
 		links
 	};
 }

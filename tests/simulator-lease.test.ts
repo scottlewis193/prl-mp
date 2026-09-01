@@ -461,6 +461,7 @@ test('settles a finished race atomically and remains unchanged when settlement i
 	assert.match(newsItems[0].headline, new RegExp(racers.at(-1)?.name as string));
 	assert.match(newsItems[0].summary, new RegExp(settledRace.name));
 	assert.match(newsItems[0].summary, /market.*10\.00.*10\.80/i);
+	assert.match(newsItems[0].summary, /career record.*wins from.*starts/i);
 	const settledParticipants = settledRacers.filter((settledRacer) =>
 		racers.some((racer) => racer.id === settledRacer.id)
 	);
@@ -513,7 +514,9 @@ test('settles a finished race atomically and remains unchanged when settlement i
 		finishers: [...racers].reverse().map((racer) => ({ id: racer.id, name: racer.name })),
 		trainers: newsTrainers.map((trainer) => ({ id: trainer.id, name: trainer.name })),
 		league: { id: newsLeague.id, name: newsLeague.name },
-		track: { id: newsTrack.id, name: newsTrack.name }
+		track: { id: newsTrack.id, name: newsTrack.name },
+		winnerCareer: { wins: 1, starts: 1 },
+		notableTactics: []
 	});
 	assert.deepEqual(
 		{

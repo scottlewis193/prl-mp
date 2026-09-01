@@ -32,7 +32,7 @@ test('race-result news is deterministic, factual, and links every available enti
 	assert.equal(first.category, 'race_result');
 	assert.equal(first.importance, 70);
 	assert.equal(first.publishedAt, facts.occurredAt);
-	assert.equal(first.templateVersion, 'race-result-v2');
+	assert.equal(first.templateVersion, 'race-result-v3');
 	assert.match(first.headline, /Bolt/);
 	assert.match(first.summary, /Indigo Cup/);
 	assert.match(first.summary, /Dash/);

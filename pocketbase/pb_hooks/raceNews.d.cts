@@ -16,6 +16,8 @@ type RaceResultFacts = {
 		previousPrice: number;
 		price: number;
 	}>;
+	winnerCareer?: { wins: number; starts: number };
+	notableTactics?: Array<{ id: string; summary: string }>;
 };
 
 declare const raceNews: {
@@ -26,7 +28,7 @@ declare const raceNews: {
 		category: 'race_result';
 		importance: number;
 		publishedAt: string;
-		templateVersion: 'race-result-v2';
+		templateVersion: 'race-result-v3';
 		links: Array<{
 			kind: 'race' | 'racer' | 'trainer' | 'league' | 'track';
 			id: string;

@@ -267,6 +267,7 @@ test('dashboard renders live account, holdings, race and watched-racer informati
 		assert.match(body, /Promotion and relegation history/i);
 		assert.match(body, /Dash.*Promoted.*Academy League.*Starter League.*Season 0/is);
 		assert.match(body, /League news.*Bolt wins Indigo Cup/is);
+		assert.match(body, /Race results.*Health.*Roster.*Seasons.*Retirements/is);
 		assert.match(body, /Bolt won at Indigo Circuit.*Dash finished second/is);
 		assert.match(body, /href="\/races\/race-recent"[^>]*>Indigo Cup/is);
 		assert.match(body, /href="\/trainers"[^>]*>Misty/is);

@@ -119,7 +119,14 @@ export type DashboardNewsItem = {
 	id: string;
 	headline: string;
 	summary: string;
-	category: 'race_result' | 'health_onset' | 'health_recovery';
+	category:
+		| 'race_result'
+		| 'health_onset'
+		| 'health_recovery'
+		| 'signing'
+		| 'release'
+		| 'retirement'
+		| 'season_update';
 	importance: number;
 	publishedAt: string;
 	links: DashboardNewsLink[];

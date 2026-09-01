@@ -21,13 +21,22 @@ type DashboardUser = {
 	watchlist?: unknown;
 };
 
+const newsCategoryFilters: Record<string, string> = {
+	race_result: 'category = "race_result"',
+	health: 'category = "health_onset" || category = "health_recovery"',
+	roster: 'category = "signing" || category = "release"',
+	season_update: 'category = "season_update"',
+	retirement: 'category = "retirement"'
+};
+
 export async function loadDashboard(
 	pb: PocketBase,
 	user: DashboardUser,
 	options: { newsPage?: number; newsCategory?: string | null } = {}
 ) {
 	const newsPage = Math.max(1, Math.trunc(options.newsPage ?? 1));
-	const newsCategory = options.newsCategory === 'race_result' ? options.newsCategory : null;
+	const requestedNewsCategory = options.newsCategory ?? '';
+	const newsCategory = requestedNewsCategory in newsCategoryFilters ? requestedNewsCategory : null;
 	const [
 		ledger,
 		wagers,
@@ -84,7 +93,7 @@ export async function loadDashboard(
 		}),
 		pb.collection('news').getList(newsPage, 5, {
 			sort: '-importance,-publishedAt,-id',
-			filter: newsCategory ? `category = "${newsCategory}"` : '',
+			filter: newsCategory ? newsCategoryFilters[newsCategory] : '',
 			fields: 'id,headline,summary,category,importance,publishedAt,links'
 		})
 	]);

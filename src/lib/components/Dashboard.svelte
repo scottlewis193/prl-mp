@@ -41,6 +41,16 @@
 	function movementLabel(zone: 'promotion' | 'relegation' | 'safe'): string {
 		return zone === 'promotion' ? 'Promotion' : zone === 'relegation' ? 'Relegation' : 'Safe';
 	}
+
+	const newsLabels: Record<string, string> = {
+		race_result: 'Race result',
+		health_onset: 'Health update',
+		health_recovery: 'Recovery',
+		signing: 'Signing',
+		release: 'Release',
+		retirement: 'Retirement',
+		season_update: 'Season update'
+	};
 </script>
 
 {#if loading}
@@ -62,12 +72,32 @@
 			<div class="card-body">
 				<div class="flex flex-wrap items-center justify-between gap-3">
 					<h1 class="card-title">League news</h1>
-					<nav aria-label="News categories" class="flex gap-2">
+					<nav aria-label="News categories" class="flex flex-wrap gap-2">
 						<a class:btn-active={!dashboard.news.category} class="btn btn-sm" href="/">All</a>
 						<a
 							class:btn-active={dashboard.news.category === 'race_result'}
 							class="btn btn-sm"
 							href="/?newsCategory=race_result">Race results</a
+						>
+						<a
+							class:btn-active={dashboard.news.category === 'health'}
+							class="btn btn-sm"
+							href="/?newsCategory=health">Health</a
+						>
+						<a
+							class:btn-active={dashboard.news.category === 'roster'}
+							class="btn btn-sm"
+							href="/?newsCategory=roster">Roster</a
+						>
+						<a
+							class:btn-active={dashboard.news.category === 'season_update'}
+							class="btn btn-sm"
+							href="/?newsCategory=season_update">Seasons</a
+						>
+						<a
+							class:btn-active={dashboard.news.category === 'retirement'}
+							class="btn btn-sm"
+							href="/?newsCategory=retirement">Retirements</a
 						>
 					</nav>
 				</div>
@@ -78,7 +108,7 @@
 						{#each dashboard.news.items as item (item.id)}
 							<article class="border-base-300 rounded-box border p-4">
 								<p class="text-base-content/60 text-xs uppercase">
-									Race result · Importance {item.importance}
+									{newsLabels[item.category] ?? item.category} · Importance {item.importance}
 								</p>
 								<h2 class="text-xl font-bold">{item.headline}</h2>
 								<p>{item.summary}</p>
