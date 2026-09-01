@@ -2,13 +2,27 @@ type RaceHistory = {
 	wins: number;
 	totalRaces: number;
 	averageFinishPosition: number;
-	races: { raceId: string; position: number; prizeMoney: number; date: string }[];
+	races: {
+		raceId: string;
+		position?: number;
+		outcome?: 'finished' | 'dnf';
+		reason?: string;
+		prizeMoney: number;
+		date: string;
+	}[];
 };
 
 type SettlementParticipant = {
 	id: string;
 	finished: boolean;
+	outcome?: 'finished' | 'dnf';
 	finishedAt: string;
+	incident?: {
+		eventId: string;
+		cause: string;
+		summary: string;
+		occurredAt: string;
+	};
 	stats: Record<string, unknown> & { ranking: number };
 	raceHistory: RaceHistory;
 	financials: Record<string, unknown> & { totalEarnings: number };
@@ -26,6 +40,12 @@ type SettlementPlan = {
 		winner: string;
 		endTime: string;
 		finishingOrder: string[];
+		nonFinishers?: Array<{
+			racerId: string;
+			reason: string;
+			summary?: string;
+			occurredAt: string;
+		}>;
 		classResults?: RaceClassResult[];
 		awardedPrizes: AwardedPrize[];
 	};
@@ -43,6 +63,10 @@ type SettlementPlan = {
 
 declare const settlementRules: {
 	orderRaceFinishers<T extends { id: string; finishedAt: string }>(participants: T[]): T[];
+	resolveWinnerMarketOutcome(input: { winnerId: string; finishingOrder: string[] }): {
+		outcome: 'settled' | 'void';
+		winnerId: string;
+	};
 	buildRaceSettlement(input: {
 		raceId: string;
 		participants: SettlementParticipant[];

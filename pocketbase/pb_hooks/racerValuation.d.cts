@@ -7,7 +7,9 @@ type RacePricePoint = {
 	reason: {
 		type: 'race_result';
 		raceId: string;
-		position: number;
+		position?: number;
+		outcome?: 'dnf';
+		incidentReason?: string;
 		fieldSize: number;
 		performancePercent: number;
 		recentFormPercent: number;
@@ -29,7 +31,9 @@ declare const racerValuation: {
 	};
 	buildRacePricePoint(input: {
 		raceId: string;
-		position: number;
+		position?: number;
+		outcome?: 'dnf';
+		incidentReason?: string;
 		fieldSize: number;
 		previousPrice: number;
 		recentFinishes: number[];

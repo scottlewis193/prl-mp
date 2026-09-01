@@ -8,9 +8,12 @@ export type RaceDiscoveryGroups = {
 };
 
 type RaceResult = {
-	position: number;
+	position?: number;
+	outcome: 'finished' | 'dnf';
 	racerId: string;
 	racerName: string;
+	reason?: string;
+	summary?: string;
 	prizeMoney?: number;
 	className?: string;
 	classPosition?: number;
@@ -81,9 +84,14 @@ export function presentRace(
 ): RacePresentation {
 	const racerById = new Map(racers.map((racer) => [racer.id, racer]));
 	const finishingOrder = Array.isArray(race.finishingOrder) ? race.finishingOrder : [];
+	const nonFinishers = Array.isArray(race.nonFinishers) ? race.nonFinishers : [];
+	const terminalParticipantIds = [
+		...finishingOrder,
+		...nonFinishers.map((nonFinisher) => nonFinisher.racerId)
+	];
 	const participantIds =
-		finishingOrder.length > 0
-			? finishingOrder
+		terminalParticipantIds.length > 0
+			? terminalParticipantIds
 			: racers
 					.filter((racer) => racer.race === race.id)
 					.flatMap((racer) => (racer.id ? [racer.id] : []));
@@ -110,18 +118,28 @@ export function presentRace(
 			position: index + 1,
 			amount
 		})),
-		results: finishingOrder.map((racerId, index) => {
-			const classResult = classResultByRacer.get(racerId);
-			return {
-				position: index + 1,
-				racerId,
-				racerName: racerById.get(racerId)?.name ?? 'Unknown racer',
-				prizeMoney: prizeByRacer.get(racerId),
-				...(classResult
-					? { className: classResult.className, classPosition: classResult.classPosition }
-					: {})
-			};
-		})
+		results: [
+			...finishingOrder.map((racerId, index) => {
+				const classResult = classResultByRacer.get(racerId);
+				return {
+					position: index + 1,
+					outcome: 'finished' as const,
+					racerId,
+					racerName: racerById.get(racerId)?.name ?? 'Unknown racer',
+					prizeMoney: prizeByRacer.get(racerId),
+					...(classResult
+						? { className: classResult.className, classPosition: classResult.classPosition }
+						: {})
+				};
+			}),
+			...nonFinishers.map((nonFinisher) => ({
+				outcome: 'dnf' as const,
+				racerId: nonFinisher.racerId,
+				racerName: racerById.get(nonFinisher.racerId)?.name ?? 'Unknown racer',
+				reason: nonFinisher.reason,
+				...(nonFinisher.summary ? { summary: nonFinisher.summary } : {})
+			}))
+		]
 	};
 }
 

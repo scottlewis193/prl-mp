@@ -39,7 +39,14 @@ export type DashboardRacerRecord = {
 		priceHistory?: RacerPricePoint[];
 	};
 	raceHistory?: {
-		races?: { raceId: string; position: number; prizeMoney: number; date: string }[];
+		races?: {
+			raceId: string;
+			position?: number;
+			outcome?: 'finished' | 'dnf';
+			reason?: string;
+			prizeMoney: number;
+			date: string;
+		}[];
 	};
 };
 
@@ -411,7 +418,10 @@ function watchedActivitySummary(
 							{
 								racerId,
 								racerName: racer.name,
-								description: `Finished ${ordinal(result.position)} in ${race?.name ?? 'a race'}`,
+								description:
+									result.outcome === 'dnf'
+										? `DNF in ${race?.name ?? 'a race'} — ${result.reason ?? 'incident'}`
+										: `Finished ${ordinal(result.position as number)} in ${race?.name ?? 'a race'}`,
 								timestamp: result.date
 							}
 						]
@@ -432,7 +442,9 @@ function priceReasonLabel(reason: RacerPricePoint['reason']): string {
 	if (reason.type === 'roster_change') {
 		return ` · Roster ${reason.transition}`;
 	}
-	return ` · Race result (${ordinal(reason.position)} of ${reason.fieldSize})`;
+	return reason.outcome === 'dnf'
+		? ` · Race DNF (${reason.incidentReason ?? 'incident'})`
+		: ` · Race result (${ordinal(reason.position as number)} of ${reason.fieldSize})`;
 }
 
 function orderedStandingsForLeague(

@@ -12,7 +12,7 @@ export type LeagueStanding = {
 
 export function applyLeagueRaceResult(
 	standing: LeagueStanding,
-	result: { position: number; points: number }
+	result: { position: number; points: number; outcome?: 'finished' | 'dnf' }
 ): LeagueStanding {
 	return standingsRules.applyLeagueRaceResult(standing, result);
 }

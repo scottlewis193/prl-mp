@@ -89,9 +89,78 @@ routerAdd(
 					throw e.badRequestError('Every racer update requires an id.', {});
 				}
 				const racer = txApp.findRecordById('racers', update.id);
+				const incident = update.currentRace?.incident;
+				if (update.currentRace?.outcome === 'dnf' && incident?.eventId) {
+					let incidentEvent;
+					try {
+						incidentEvent = txApp.findFirstRecordByFilter('events', 'idempotencyKey = {:key}', {
+							key: `race-incident:${incident.eventId}`
+						});
+					} catch {
+						incidentEvent = new Record(txApp.findCollectionByNameOrId('events'));
+						incidentEvent.set('type', 'RaceIncident');
+						incidentEvent.set('idempotencyKey', `race-incident:${incident.eventId}`);
+						incidentEvent.set('occurredAt', incident.occurredAt);
+						incidentEvent.set('raceIds', racer.getString('race') ? [racer.getString('race')] : []);
+						incidentEvent.set('started', true);
+						incidentEvent.set('finished', true);
+						incidentEvent.set('facts', {
+							racerId: racer.id,
+							raceId: racer.getString('race'),
+							incident
+						});
+						txApp.save(incidentEvent);
+					}
+					let condition;
+					try {
+						condition = txApp.findFirstRecordByFilter(
+							'healthConditions',
+							'sourceEvent = {:eventId}',
+							{ eventId: incidentEvent.id }
+						);
+					} catch {
+						condition = new Record(txApp.findCollectionByNameOrId('healthConditions'));
+						const recoveryDays = incident.healthSeverity === 'severe' ? 14 : 7;
+						condition.set('racer', racer.id);
+						condition.set('kind', 'injury');
+						condition.set('severity', incident.healthSeverity);
+						condition.set('cause', 'race_incident');
+						condition.set('onsetAt', incident.occurredAt);
+						condition.set(
+							'expectedRecoveryAt',
+							new Date(Date.parse(incident.occurredAt) + recoveryDays * 86_400_000).toISOString()
+						);
+						condition.set('eligibilityEffect', 'ineligible');
+						condition.set('performanceMultiplier', 1);
+						condition.set('inputs', {
+							raceId: racer.getString('race'),
+							incidentType: incident.type,
+							incidentCause: incident.cause
+						});
+						condition.set('roll', incident.decisionRoll);
+						condition.set('probability', incident.probability);
+						condition.set('rulesVersion', incident.rulesVersion);
+						condition.set('sourceEvent', incidentEvent.id);
+						txApp.save(condition);
+					}
+					update.health = {
+						eligible: false,
+						performanceMultiplier: 0,
+						activeConditionIds: [
+							...new Set([
+								...(update.health?.activeConditionIds || []).filter(
+									(id) => id !== incident.eventId
+								),
+								condition.id
+							])
+						]
+					};
+				}
 				racer.set('currentRace', update.currentRace);
 				racer.set('positioning', update.positioning);
 				racer.set('stats', update.stats);
+				if (update.health) racer.set('health', update.health);
+				if (update.status) racer.set('status', update.status);
 				txApp.save(racer);
 			}
 
@@ -122,6 +191,9 @@ routerAdd(
 					if (typeof raceUpdate.endTime === 'string') race.set('endTime', raceUpdate.endTime);
 					if (Array.isArray(raceUpdate.finishingOrder)) {
 						race.set('finishingOrder', raceUpdate.finishingOrder);
+					}
+					if (Array.isArray(raceUpdate.nonFinishers)) {
+						race.set('nonFinishers', raceUpdate.nonFinishers);
 					}
 					txApp.save(race);
 				}
@@ -195,8 +267,10 @@ routerAdd(
 			for (const racer of racers) {
 				const currentRace = new DynamicModel({
 					finished: false,
+					outcome: '',
 					finishedAt: '',
 					lastUpdatedAt: '',
+					incident: {},
 					trainerAtEntry: {}
 				});
 				racer.unmarshalJSONField('currentRace', currentRace);
@@ -235,9 +309,13 @@ routerAdd(
 				const ownership = new DynamicModel({ totalShares: 0, shareholders: [] });
 				racer.unmarshalJSONField('ownership', ownership);
 				racerById[racer.id] = racer;
+				let durableRaceState = {};
+				try {
+					durableRaceState = JSON.parse(toString(racer.get('currentRace'))) || {};
+				} catch {}
 				let trainerAtEntry = {};
 				try {
-					trainerAtEntry = JSON.parse(toString(racer.get('currentRace')))?.trainerAtEntry || {};
+					trainerAtEntry = durableRaceState.trainerAtEntry || {};
 				} catch {
 					trainerAtEntry = {};
 				}
@@ -255,7 +333,9 @@ routerAdd(
 				participants.push({
 					id: racer.id,
 					finished: currentRace.finished,
+					outcome: durableRaceState.outcome || 'finished',
 					finishedAt: currentRace.finishedAt || currentRace.lastUpdatedAt,
+					incident: durableRaceState.incident,
 					stats: {
 						hp: stats.hp,
 						attack: stats.attack,
@@ -303,6 +383,15 @@ routerAdd(
 			} catch (error) {
 				throw e.badRequestError(error.message, {});
 			}
+			let winnerMarket;
+			try {
+				winnerMarket = require(`${__hooks}/raceSettlement.cjs`).resolveWinnerMarketOutcome({
+					winnerId: plan.race.winner,
+					finishingOrder: plan.race.finishingOrder
+				});
+			} catch (error) {
+				throw e.badRequestError(error.message, {});
+			}
 
 			const settlementEvent = new Record(txApp.findCollectionByNameOrId('events'));
 			settlementEvent.set('type', 'RaceSettled');
@@ -317,11 +406,18 @@ routerAdd(
 			const valuationRules = require(`${__hooks}/racerValuation.cjs`);
 			const participantById = {};
 			for (const participant of participants) participantById[participant.id] = participant;
+			const nonFinisherById = {};
+			for (const nonFinisher of plan.race.nonFinishers || []) {
+				nonFinisherById[nonFinisher.racerId] = nonFinisher;
+			}
 			const priceMovements = plan.racers.map((update, index) => {
 				const participant = participantById[update.id];
+				const nonFinisher = nonFinisherById[update.id];
 				const pricePoint = valuationRules.buildRacePricePoint({
 					raceId,
-					position: index + 1,
+					...(nonFinisher
+						? { outcome: 'dnf', incidentReason: nonFinisher.reason }
+						: { position: index + 1 }),
 					fieldSize: plan.racers.length,
 					previousPrice: update.financials.currentSharePrice,
 					recentFinishes: participant.raceHistory.races.map((result) => result.position),
@@ -369,11 +465,33 @@ routerAdd(
 
 				const standingCollection = txApp.findCollectionByNameOrId('leagueStandings');
 				const standingsRules = require(`${__hooks}/leagueStandings.cjs`);
-				for (let index = 0; index < plan.race.finishingOrder.length; index += 1) {
-					const racerId = plan.race.finishingOrder[index];
-					const classResult = plan.race.classResults?.[index];
-					const leagueId = classResult?.classId || raceLeagueId;
-					const resultPosition = classResult?.classPosition || index + 1;
+				let classEntries = [];
+				try {
+					classEntries = JSON.parse(toString(race.get('classEntries'))) || [];
+				} catch {}
+				const classEntryByRacerId = {};
+				for (const entry of classEntries) classEntryByRacerId[entry.racerId] = entry;
+				const standingResults = [
+					...plan.race.finishingOrder.map((racerId, index) => {
+						const classResult = plan.race.classResults?.[index];
+						return {
+							racerId,
+							leagueId: classResult?.classId || raceLeagueId,
+							position: classResult?.classPosition || index + 1,
+							points: awardedPoints[index],
+							outcome: 'finished'
+						};
+					}),
+					...(plan.race.nonFinishers || []).map((result) => ({
+						racerId: result.racerId,
+						leagueId: classEntryByRacerId[result.racerId]?.classId || raceLeagueId,
+						position: Math.max(1, participants.length),
+						points: 0,
+						outcome: 'dnf'
+					}))
+				];
+				for (const standingResult of standingResults) {
+					const { racerId, leagueId } = standingResult;
 					let standing;
 					try {
 						standing = txApp.findFirstRecordByFilter(
@@ -403,7 +521,11 @@ routerAdd(
 								}
 							})()
 						},
-						{ position: resultPosition, points: awardedPoints[index] }
+						{
+							position: standingResult.position,
+							points: standingResult.points,
+							outcome: standingResult.outcome
+						}
 					);
 					standing.set('league', leagueId);
 					standing.set('points', projected.points);
@@ -417,8 +539,9 @@ routerAdd(
 					seasonPointFacts.push({
 						standingId: standing.id,
 						racerId,
-						position: resultPosition,
-						points: awardedPoints[index]
+						position: standingResult.outcome === 'dnf' ? 0 : standingResult.position,
+						points: standingResult.points,
+						outcome: standingResult.outcome
 					});
 				}
 			}
@@ -463,13 +586,14 @@ routerAdd(
 			}
 			require(`${__hooks}/wagerSettlement.cjs`).resolveRaceWagers(txApp, {
 				raceId,
-				outcome: 'settled',
-				winnerId: plan.race.winner,
+				outcome: winnerMarket.outcome,
+				winnerId: winnerMarket.winnerId,
 				resolvedAt: plan.race.endTime
 			});
 
 			race.set('winner', plan.race.winner);
 			race.set('finishingOrder', plan.race.finishingOrder);
+			race.set('nonFinishers', plan.race.nonFinishers || []);
 			if (plan.race.classResults) race.set('classResults', plan.race.classResults);
 			race.set('awardedPrizes', plan.race.awardedPrizes);
 			race.set('endTime', plan.race.endTime);
@@ -479,6 +603,12 @@ routerAdd(
 			const finisherFacts = plan.race.finishingOrder.map((racerId) => ({
 				id: racerId,
 				name: racerById[racerId].getString('name')
+			}));
+			const nonFinisherFacts = (plan.race.nonFinishers || []).map((result) => ({
+				id: result.racerId,
+				name: racerById[result.racerId].getString('name'),
+				reason: result.reason,
+				summary: result.summary
 			}));
 			const trainerIds = Object.keys(affectedTrainerIds).sort();
 			const leagueId = race.getString('league') || plan.race.classResults?.[0]?.classId;
@@ -490,6 +620,7 @@ routerAdd(
 				race: { id: raceId, name: race.getString('name') },
 				winner: finisherFacts[0],
 				finishers: finisherFacts,
+				...(nonFinisherFacts.length ? { nonFinishers: nonFinisherFacts } : {}),
 				trainers: trainerIds.map((trainerId) => {
 					const trainer = txApp.findRecordById('trainers', trainerId);
 					return { id: trainerId, name: trainer.getString('name') };
@@ -502,6 +633,8 @@ routerAdd(
 				raceFormat,
 				winnerId: plan.race.winner,
 				finishingOrder: plan.race.finishingOrder,
+				nonFinishers: plan.race.nonFinishers || [],
+				winnerMarket,
 				classResults: plan.race.classResults || [],
 				awardedPrizes: plan.race.awardedPrizes,
 				trainerResults: trainerResultFacts,
@@ -527,7 +660,10 @@ routerAdd(
 			const newsItem = new Record(txApp.findCollectionByNameOrId('news'));
 			newsItem.set('sourceEvent', settlementEvent.id);
 			newsItem.set('race', raceId);
-			newsItem.set('racers', plan.race.finishingOrder);
+			newsItem.set('racers', [
+				...plan.race.finishingOrder,
+				...(plan.race.nonFinishers || []).map((result) => result.racerId)
+			]);
 			newsItem.set('trainers', trainerIds);
 			newsItem.set('league', leagueId);
 			newsItem.set('track', trackId);

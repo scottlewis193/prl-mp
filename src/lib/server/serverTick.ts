@@ -11,6 +11,7 @@ import { getRacers } from './racers';
 import { getFinishedRaces, getRunningRaces, settleRace } from './races';
 import { getAllRacetracks } from './racetracks';
 import { resolveRacingAttacksForField } from './racingAttacks';
+import { resolveRaceIncident } from './raceIncidents';
 import { resolveOvertaking } from './serverFunctions';
 import { simulateRacer } from './simulateRacer';
 import { authenticateServer } from './pocketbase';
@@ -216,6 +217,46 @@ async function simulateRace(
 			}
 		}
 		for (const racer of racers) {
+			if (racer.currentRace.finished) continue;
+			const incident = resolveRaceIncident({
+				raceId: race.id,
+				simulationSeed,
+				now,
+				racer,
+				track: racetrack,
+				riskPolicy: race.riskPolicy ?? {
+					level: 'standard',
+					incidentMultiplier: 1,
+					trackRisk: racetrack.risk
+				},
+				raceFormat: race.raceFormat ?? {
+					type: 'league_race',
+					ranked: true,
+					rulesVersion: 'league-race-v1'
+				}
+			});
+			racer.currentRace.lastIncidentDecisionKey = incident.decision.decisionKey;
+			if (incident.event) {
+				racer.currentRace.significantEvents = mergeRaceSignificantEvents(
+					racer.currentRace.significantEvents,
+					[incident.event]
+				);
+			}
+			if (incident.outcome === 'dnf' && incident.incident && incident.healthConsequence) {
+				racer.currentRace.finished = true;
+				racer.currentRace.outcome = 'dnf';
+				racer.currentRace.finishedAt = incident.incident.occurredAt;
+				racer.currentRace.incident = incident.incident;
+				racer.health = {
+					eligible: incident.healthConsequence.eligible,
+					performanceMultiplier: incident.healthConsequence.performanceMultiplier,
+					activeConditionIds: [
+						...new Set([...(racer.health?.activeConditionIds ?? []), incident.incident.eventId])
+					]
+				};
+				racer.status = { ...racer.status, injured: true };
+				continue;
+			}
 			const simulated = simulateRacer(racer, racetrack, now, race.totalLaps, {
 				raceId: race.id,
 				simulationSeed,
@@ -240,6 +281,7 @@ async function simulateRace(
 
 			if (simulated.finished && !racer.currentRace.finished) {
 				racer.currentRace.finished = true;
+				racer.currentRace.outcome = 'finished';
 				racer.currentRace.finishedAt = simulated.finishedAt ?? finishedAt;
 			}
 		}
@@ -281,6 +323,8 @@ function toSimulationUpdate(racer: Racer): RacerSimulationUpdate {
 		id: racer.id,
 		currentRace: racer.currentRace,
 		positioning: racer.positioning,
-		stats: racer.stats
+		stats: racer.stats,
+		health: racer.health,
+		status: racer.status
 	};
 }

@@ -18,7 +18,13 @@ export const load = async ({ params, locals }) => {
 
 	try {
 		const participantIds = [
-			...new Set([race.winner, ...(race.finishingOrder ?? [])].filter(Boolean))
+			...new Set(
+				[
+					race.winner,
+					...(race.finishingOrder ?? []),
+					...(race.nonFinishers ?? []).map((result) => result.racerId)
+				].filter(Boolean)
+			)
 		];
 		const participantFilter = [
 			`race = ${JSON.stringify(params.id)}`,

@@ -74,3 +74,34 @@ test('exhibition result news states its unranked lower-prize format', () => {
 
 	assert.match(story.summary, /unranked Exhibition Race.*reduced prizes/i);
 });
+
+test('race-result news explains incidents and supports an all-DNF outcome', () => {
+	const mixed = buildRaceResultStory({
+		...facts,
+		nonFinishers: [
+			{
+				id: 'racer-3',
+				name: 'Comet',
+				reason: 'oil-slick',
+				summary: 'Comet did not finish after an oil slick crash.'
+			}
+		]
+	});
+	assert.match(mixed.summary, /Comet did not finish.*oil slick/i);
+
+	const allDnf = buildRaceResultStory({
+		...facts,
+		winner: undefined,
+		finishers: [],
+		nonFinishers: [
+			{
+				id: 'racer-1',
+				name: 'Bolt',
+				reason: 'mechanical-failure',
+				summary: 'Bolt did not finish after a mechanical failure.'
+			}
+		]
+	});
+	assert.match(allDnf.headline, /no classified finisher/i);
+	assert.match(allDnf.summary, /winner market was void/i);
+});

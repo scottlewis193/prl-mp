@@ -162,6 +162,78 @@ test('builds deterministic overall and class results and awards Grand Prix prize
 	]);
 });
 
+test('ranks and rewards only finishers while recording DNFs deterministically', () => {
+	const race = { id: 'race-dnf', status: 'finished' } as Race;
+	const finisher = settlementRacer('racer-finish', '2026-08-14T12:00:02.000Z');
+	const dnf = settlementRacer('racer-dnf', '2026-08-14T12:00:01.000Z');
+	dnf.currentRace.outcome = 'dnf';
+	dnf.currentRace.incident = {
+		eventId: 'race-dnf:racer-dnf:incident',
+		type: 'crash',
+		cause: 'oil-slick',
+		summary: 'Dash did not finish after an oil slick crash.',
+		occurredAt: '2026-08-14T12:00:01.000Z',
+		healthSeverity: 'severe',
+		decisionRoll: 0.01,
+		probability: 0.1,
+		rulesVersion: 'race-incidents-v1'
+	};
+
+	const settlement = buildRaceSettlement(race, [dnf, finisher], [10, 5]);
+
+	assert.equal(settlement.race.winner, 'racer-finish');
+	assert.deepEqual(settlement.race.finishingOrder, ['racer-finish']);
+	assert.deepEqual(settlement.race.awardedPrizes, [
+		{ racerId: 'racer-finish', position: 1, amount: 10 }
+	]);
+	assert.deepEqual(settlement.race.nonFinishers, [
+		{
+			racerId: 'racer-dnf',
+			reason: 'oil-slick',
+			summary: 'Dash did not finish after an oil slick crash.',
+			occurredAt: '2026-08-14T12:00:01.000Z'
+		}
+	]);
+	assert.deepEqual(
+		settlement.racers.map((racer) => racer.raceHistory.races.at(-1)),
+		[
+			{ raceId: 'race-dnf', position: 1, prizeMoney: 10, date: '2026-08-14T12:00:02.000Z' },
+			{
+				raceId: 'race-dnf',
+				outcome: 'dnf',
+				prizeMoney: 0,
+				date: '2026-08-14T12:00:02.000Z',
+				reason: 'oil-slick'
+			}
+		]
+	);
+});
+
+test('settles an all-DNF race without inventing a winner or prizes', () => {
+	const racer = settlementRacer('racer-dnf', '2026-08-14T12:00:01.000Z');
+	racer.currentRace.outcome = 'dnf';
+	racer.currentRace.incident = {
+		eventId: 'incident-1',
+		type: 'mechanical',
+		cause: 'mechanical-failure',
+		summary: 'Bolt did not finish after a mechanical failure.',
+		occurredAt: '2026-08-14T12:00:01.000Z',
+		healthSeverity: 'minor',
+		decisionRoll: 0.01,
+		probability: 0.1,
+		rulesVersion: 'race-incidents-v1'
+	};
+
+	const settlement = buildRaceSettlement(
+		{ id: 'race-all-dnf', status: 'finished' } as Race,
+		[racer],
+		[10]
+	);
+	assert.equal(settlement.race.winner, '');
+	assert.deepEqual(settlement.race.finishingOrder, []);
+	assert.deepEqual(settlement.race.awardedPrizes, []);
+});
+
 function settlementRacer(
 	id: string,
 	finishedAt: string,

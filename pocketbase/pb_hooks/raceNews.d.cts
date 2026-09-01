@@ -5,8 +5,9 @@ type RaceResultFacts = {
 	race: NewsEntity & {
 		format?: 'league_race' | 'grand_prix' | 'exhibition' | 'legends_exhibition';
 	};
-	winner: NewsEntity;
+	winner?: NewsEntity;
 	finishers: NewsEntity[];
+	nonFinishers?: Array<NewsEntity & { reason: string; summary?: string }>;
 	trainers: NewsEntity[];
 	league: NewsEntity;
 	track: NewsEntity;

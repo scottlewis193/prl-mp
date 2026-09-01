@@ -3,14 +3,30 @@ const RECENT_FORM_LIMIT = 5;
 function applyLeagueRaceResult(standing, result) {
 	const position = Number(result.position);
 	const points = Number(result.points);
+	const isDnf = result.outcome === 'dnf';
 	if (!Number.isInteger(position) || position < 1) {
 		throw new Error('A league result requires a positive finishing position');
 	}
 	if (!Number.isFinite(points) || points < 0) {
 		throw new Error('A league result requires non-negative points');
 	}
+	if (isDnf && points !== 0) throw new Error('A DNF cannot receive league points');
 
 	const previousBest = Number(standing.bestFinish) || 0;
+	if (isDnf) {
+		return {
+			...standing,
+			points: Number(standing.points) || 0,
+			starts: (Number(standing.starts) || 0) + 1,
+			wins: Number(standing.wins) || 0,
+			podiums: Number(standing.podiums) || 0,
+			bestFinish: previousBest,
+			recentForm: [0, ...(Array.isArray(standing.recentForm) ? standing.recentForm : [])].slice(
+				0,
+				RECENT_FORM_LIMIT
+			)
+		};
+	}
 	return {
 		...standing,
 		points: (Number(standing.points) || 0) + points,
@@ -48,8 +64,8 @@ function pointsForRaceSettlement(raceFormat, pointsCurve, positionsOrFinisherCou
 	const positions = Array.isArray(positionsOrFinisherCount)
 		? positionsOrFinisherCount
 		: Array.from({ length: positionsOrFinisherCount }, (_, index) => index + 1);
+	if (positions.length === 0) return [];
 	if (
-		positions.length < 1 ||
 		positions.some((position) => !Number.isInteger(position) || position < 1) ||
 		!Array.isArray(pointsCurve) ||
 		pointsCurve.length < Math.max(...positions) ||

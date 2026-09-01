@@ -13,13 +13,21 @@ export type AwardedPrize = {
 	classPosition?: number;
 	amount: number;
 };
+export type RaceNonFinisher = {
+	racerId: string;
+	reason: string;
+	summary?: string;
+	occurredAt: string;
+};
 export type RaceClassEntry = { racerId: string; classId: string; className: string };
 export type RaceClassResult = RaceClassEntry & { overallPosition: number; classPosition: number };
 
 export type RaceValuationReason = {
 	type: 'race_result';
 	raceId: string;
-	position: number;
+	position?: number;
+	outcome?: 'dnf';
+	incidentReason?: string;
 	fieldSize: number;
 	performancePercent: number;
 	recentFormPercent: number;
@@ -134,15 +142,28 @@ export type RaceSignificantEvent = {
 		| 'attack_attempted'
 		| 'attack_landed'
 		| 'attack_missed'
-		| 'defence_activated';
+		| 'defence_activated'
+		| 'incident'
+		| 'incident_dnf';
 	occurredAt: string;
 	racerId: string;
 	racerName: string;
 	targetRacerId?: string;
 	targetRacerName?: string;
-	moveId: string;
-	moveName: string;
+	moveId?: string;
+	moveName?: string;
 	summary: string;
+};
+export type RaceIncident = {
+	eventId: string;
+	type: 'crash' | 'mechanical';
+	cause: string;
+	summary: string;
+	occurredAt: string;
+	healthSeverity: 'minor' | 'moderate' | 'severe';
+	decisionRoll: number;
+	probability: number;
+	rulesVersion: 'race-incidents-v1';
 };
 export type RaceRiskPolicy = {
 	level: 'low' | 'standard' | 'high';
@@ -163,6 +184,7 @@ export type RaceType = {
 	racetrack: string;
 	winner: string;
 	finishingOrder: string[];
+	nonFinishers?: RaceNonFinisher[];
 	classEntries?: RaceClassEntry[];
 	classResults?: RaceClassResult[];
 	prizeCurve?: number[];
@@ -206,6 +228,7 @@ export class Race implements RaceType {
 	racetrack: string = '175hl67e5pvjjib';
 	winner: string = '';
 	finishingOrder: string[] = [];
+	nonFinishers?: RaceNonFinisher[] = [];
 	classEntries?: RaceClassEntry[] = [];
 	classResults?: RaceClassResult[] = [];
 	prizeCurve?: number[] = [];
@@ -260,7 +283,10 @@ type RacerType = RacerLifecycle & {
 		distanceFromCheckpoint: number;
 		lastUpdatedAt: string;
 		finished: boolean;
+		outcome?: 'finished' | 'dnf';
 		finishedAt?: string;
+		lastIncidentDecisionKey?: string;
+		incident?: RaceIncident;
 		lapStartTime?: number;
 		lapTimes: { [lapNumber: number]: number };
 		bestLapTime?: number;
@@ -276,7 +302,9 @@ type RacerType = RacerLifecycle & {
 		averageFinishPosition: number;
 		races: {
 			raceId: string;
-			position: number;
+			position?: number;
+			outcome?: 'finished' | 'dnf';
+			reason?: string;
 			prizeMoney: number;
 			date: string;
 		}[];
@@ -397,7 +425,10 @@ export class Racer implements RacerType {
 		distanceFromCheckpoint: number;
 		lastUpdatedAt: string;
 		finished: boolean;
+		outcome?: 'finished' | 'dnf';
 		finishedAt?: string;
+		lastIncidentDecisionKey?: string;
+		incident?: RaceIncident;
 		lapStartTime?: number;
 		lapTimes: { [lapNumber: number]: number };
 		bestLapTime?: number;
@@ -418,7 +449,14 @@ export class Racer implements RacerType {
 		wins: number;
 		totalRaces: number;
 		averageFinishPosition: number;
-		races: { raceId: string; position: number; prizeMoney: number; date: string }[];
+		races: {
+			raceId: string;
+			position?: number;
+			outcome?: 'finished' | 'dnf';
+			reason?: string;
+			prizeMoney: number;
+			date: string;
+		}[];
 	} = $state({
 		wins: 0,
 		totalRaces: 0,
@@ -763,6 +801,7 @@ export type EventType = {
 		| 'ExhibitionRace'
 		| 'LegendsExhibition'
 		| 'GrandPrix'
+		| 'RaceIncident'
 		| 'RaceSettled'
 		| 'HealthOnset'
 		| 'HealthRecovery';
@@ -774,9 +813,15 @@ export type EventType = {
 		raceId?: string;
 		winnerId?: string;
 		finishingOrder?: string[];
+		nonFinishers?: RaceNonFinisher[];
 		classResults?: RaceClassResult[];
 		awardedPrizes?: AwardedPrize[];
-		seasonPoints?: { racerId: string; position: number; points: number }[];
+		seasonPoints?: {
+			racerId: string;
+			position: number;
+			points: number;
+			outcome?: 'finished' | 'dnf';
+		}[];
 		racerId?: string;
 		conditionId?: string;
 		transition?: 'onset' | 'recovery';

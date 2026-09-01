@@ -172,10 +172,17 @@
 			<ol class="rounded-box border-base-300 bg-base-200 divide-base-300 divide-y border">
 				{#each racePresentation.results as result}
 					<li class="flex items-center gap-4 p-4">
-						<strong class="min-w-20 text-lg">
-							{race.raceFormat?.type === 'grand_prix' ? 'Overall ' : ''}{ordinal(result.position)}
-						</strong>
+						{#if result.outcome === 'dnf'}
+							<strong class="text-error min-w-20 text-lg">DNF</strong>
+						{:else if result.position}
+							<strong class="min-w-20 text-lg">
+								{race.raceFormat?.type === 'grand_prix' ? 'Overall ' : ''}{ordinal(result.position)}
+							</strong>
+						{/if}
 						<span class="flex-1">{result.racerName}</span>
+						{#if result.outcome === 'dnf'}
+							<span>{result.summary ?? `Did not finish — ${result.reason ?? 'incident'}`}</span>
+						{/if}
 						{#if result.className && result.classPosition}
 							<span>{result.className} class {ordinal(result.classPosition)}</span>
 						{/if}

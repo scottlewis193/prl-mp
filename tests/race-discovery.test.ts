@@ -103,10 +103,11 @@ test('race presentation resolves track, participants, winner and finishing resul
 			{ position: 3, amount: 10 }
 		],
 		results: [
-			{ position: 1, racerId: 'racer-3', racerName: 'Comet', prizeMoney: 30 },
-			{ position: 2, racerId: 'racer-1', racerName: 'Bolt', prizeMoney: 20 },
+			{ position: 1, outcome: 'finished', racerId: 'racer-3', racerName: 'Comet', prizeMoney: 30 },
+			{ position: 2, outcome: 'finished', racerId: 'racer-1', racerName: 'Bolt', prizeMoney: 20 },
 			{
 				position: 3,
+				outcome: 'finished',
 				racerId: 'missing-racer',
 				racerName: 'Unknown racer',
 				prizeMoney: 10
@@ -130,6 +131,39 @@ test('race presentation treats a null PocketBase finishing order as no results',
 		prizeStructure: [],
 		results: []
 	});
+});
+
+test('race presentation distinguishes a finisher from an explained DNF', () => {
+	const completed = race('race-dnf', 'settled', '2026-08-15T10:00:00Z');
+	completed.winner = 'racer-1';
+	completed.finishingOrder = ['racer-1'];
+	completed.nonFinishers = [
+		{
+			racerId: 'racer-2',
+			reason: 'oil-slick',
+			summary: 'Dash did not finish after an oil slick crash.',
+			occurredAt: '2026-08-15T10:03:00Z'
+		}
+	];
+
+	const presentation = presentRace(completed, racers, [track]);
+	assert.deepEqual(presentation.participants, [racers[0], racers[1]]);
+	assert.deepEqual(presentation.results, [
+		{
+			position: 1,
+			outcome: 'finished',
+			racerId: 'racer-1',
+			racerName: 'Bolt',
+			prizeMoney: undefined
+		},
+		{
+			outcome: 'dnf',
+			racerId: 'racer-2',
+			racerName: 'Dash',
+			reason: 'oil-slick',
+			summary: 'Dash did not finish after an oil slick crash.'
+		}
+	]);
 });
 
 test('race schedule gives an exact time and a useful countdown', () => {

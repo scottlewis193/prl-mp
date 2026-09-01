@@ -21,15 +21,17 @@ function recentFinishPercent(position) {
 function buildRacePricePoint(input) {
 	const position = Number(input.position);
 	const fieldSize = Number(input.fieldSize);
+	const isDnf = input.outcome === 'dnf';
 	const previousPrice = Number(input.previousPrice);
 	if (!input.raceId || !input.sourceEvent || !Number.isFinite(Date.parse(input.occurredAt))) {
 		throw new Error('Race valuation requires a race, source event, and occurrence time');
 	}
 	if (
-		!Number.isInteger(position) ||
+		(!isDnf && !Number.isInteger(position)) ||
 		!Number.isInteger(fieldSize) ||
-		position < 1 ||
-		position > fieldSize
+		(!isDnf && (position < 1 || position > fieldSize)) ||
+		fieldSize < 1 ||
+		(isDnf && !input.incidentReason)
 	) {
 		throw new Error('Race valuation requires a valid finishing position and field size');
 	}
@@ -37,17 +39,20 @@ function buildRacePricePoint(input) {
 		throw new Error('Race valuation requires a positive current price');
 	}
 
-	const performancePercent =
-		fieldSize === 1
+	const performancePercent = isDnf
+		? -RACE_VALUATION_RULES.maximumEventPercent
+		: fieldSize === 1
 			? RACE_VALUATION_RULES.performancePercent
 			: RACE_VALUATION_RULES.performancePercent * (1 - (2 * (position - 1)) / (fieldSize - 1));
 	const recentFinishes = (Array.isArray(input.recentFinishes) ? input.recentFinishes : [])
 		.filter((finish) => Number.isInteger(finish) && finish > 0)
 		.slice(-RACE_VALUATION_RULES.recentFormWindow);
-	const recentFormPercent = recentFinishes.length
-		? recentFinishes.reduce((total, finish) => total + recentFinishPercent(finish), 0) /
-			recentFinishes.length
-		: 0;
+	const recentFormPercent = isDnf
+		? 0
+		: recentFinishes.length
+			? recentFinishes.reduce((total, finish) => total + recentFinishPercent(finish), 0) /
+				recentFinishes.length
+			: 0;
 	const uncappedPercent = performancePercent + recentFormPercent;
 	const boundedPercent = Math.max(
 		-RACE_VALUATION_RULES.maximumEventPercent,
@@ -71,7 +76,7 @@ function buildRacePricePoint(input) {
 		reason: {
 			type: 'race_result',
 			raceId: input.raceId,
-			position,
+			...(isDnf ? { outcome: 'dnf', incidentReason: input.incidentReason } : { position }),
 			fieldSize,
 			performancePercent: roundMoney(performancePercent),
 			recentFormPercent: roundMoney(recentFormPercent),

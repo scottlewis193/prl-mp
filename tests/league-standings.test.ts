@@ -67,6 +67,29 @@ test('recent form retains the five latest league finishes', () => {
 	);
 });
 
+test('a DNF records a start and zero points without inventing a finish, podium, or best result', () => {
+	assert.deepEqual(
+		applyLeagueRaceResult(
+			standing('racer-dnf', { points: 18, starts: 2, bestFinish: 2, recentForm: [2, 4] }),
+			{ outcome: 'dnf', position: 4, points: 0 }
+		),
+		standing('racer-dnf', {
+			points: 18,
+			starts: 3,
+			bestFinish: 2,
+			recentForm: [0, 2, 4]
+		})
+	);
+	assert.deepEqual(
+		pointsForRaceSettlement(
+			{ type: 'league_race', ranked: true, rulesVersion: 'league-race-v1' },
+			[10, 6, 3],
+			0
+		),
+		[]
+	);
+});
+
 test('standings resolve ties by points, wins, podiums, best finish, then racer ID', () => {
 	const ordered = orderLeagueStandings([
 		standing('racer-id-z', { points: 30, wins: 1, podiums: 2, bestFinish: 2 }),

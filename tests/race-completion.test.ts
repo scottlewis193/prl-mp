@@ -22,3 +22,25 @@ test('records deterministic completion metadata after every racer finishes', () 
 		finishingOrder: ['racer-a', 'racer-b']
 	});
 });
+
+test('completes after every racer reaches a terminal finish or DNF outcome', () => {
+	const racers = [
+		{
+			id: 'racer-a',
+			currentRace: { finished: true, outcome: 'finished', finishedAt: '2026-08-14T12:00:02Z' }
+		},
+		{
+			id: 'racer-b',
+			currentRace: { finished: true, outcome: 'dnf', finishedAt: '2026-08-14T12:00:01Z' }
+		}
+	] as Racer[];
+
+	assert.deepEqual(buildRaceCompletion('race-dnf', racers), {
+		id: 'race-dnf',
+		status: 'finished',
+		winner: 'racer-a',
+		endTime: '2026-08-14T12:00:02Z',
+		finishingOrder: ['racer-a'],
+		nonFinishers: [{ racerId: 'racer-b', occurredAt: '2026-08-14T12:00:01Z', reason: 'incident' }]
+	});
+});

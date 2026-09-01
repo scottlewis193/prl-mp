@@ -8,11 +8,17 @@ export type SimulatorLeaseGrant = {
 	token: number;
 };
 
-export type RacerSimulationUpdate = Pick<Racer, 'currentRace' | 'positioning' | 'stats'> & {
+export type RacerSimulationUpdate = Pick<
+	Racer,
+	'currentRace' | 'positioning' | 'stats' | 'health' | 'status'
+> & {
 	id: string;
 };
 
-export type RaceSimulationUpdate = Pick<Race, 'id' | 'status' | 'winner' | 'finishingOrder'> & {
+export type RaceSimulationUpdate = Pick<
+	Race,
+	'id' | 'status' | 'winner' | 'finishingOrder' | 'nonFinishers'
+> & {
 	endTime?: string;
 };
 
