@@ -54,13 +54,13 @@ test(
 			assert.equal(seasons[0].movementCount, 4);
 
 			const standings = await client.collection('leagueStandings').getFullList({ sort: 'racer' });
-			assert.equal(standings.length, 8);
+			assert.equal(standings.length, 100);
 			assert.equal(
 				standings.every((entry) => entry.season === seasons[0].id),
 				true
 			);
 			assert.equal(
-				standings.every((entry) => entry.league === 'prlseeddemo0001'),
+				standings.every((entry) => Boolean(entry.league)),
 				true
 			);
 			assert.equal(

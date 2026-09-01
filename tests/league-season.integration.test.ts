@@ -38,7 +38,10 @@ test(
 
 			const seedRaceId = 'prlseedrace0001';
 			const leagueId = 'prlseeddemo0001';
-			const racers = await client.collection('racers').getFullList({ sort: 'id' });
+			const racers = await client.collection('racers').getFullList({
+				filter: `league = "${leagueId}"`,
+				sort: 'id'
+			});
 			await Promise.all(
 				racers.map((racer) => client.collection('racers').update(racer.id, { race: null }))
 			);
@@ -73,7 +76,7 @@ test(
 				.collection('seasons')
 				.getFullList({ filter: 'status = "active"' });
 			const [rankedRace] = await client.collection('races').getFullList({
-				filter: `season = "${season.id}" && status = "pending"`
+				filter: `season = "${season.id}" && league = "${leagueId}" && status = "pending"`
 			});
 			const entrants = await client.collection('racers').getFullList({
 				filter: `race = "${rankedRace.id}"`,
@@ -159,7 +162,14 @@ test(
 						bestFinish: 0,
 						recentForm: []
 					}
-				]
+				].sort(
+					(left, right) =>
+						right.points - left.points ||
+						right.wins - left.wins ||
+						right.podiums - left.podiums ||
+						left.bestFinish - right.bestFinish ||
+						left.racer.localeCompare(right.racer)
+				)
 			);
 			const beforeRetry = JSON.stringify(rankedStandings);
 			assert.deepEqual(

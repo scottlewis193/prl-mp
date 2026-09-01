@@ -1,0 +1,18 @@
+{
+	"version": "initial-population-v1",
+	"seed": "prl-initial-world-v1",
+	"careerStartedAt": "2026-01-01 00:00:00.000Z",
+	"leagues": {
+		"names": ["Premier League", "Championship", "League One", "League Two", "Conference"],
+		"activeRacers": 20,
+		"prizeMoneyScales": [5, 4, 3, 2, 1]
+	},
+	"trainers": {
+		"count": 25,
+		"rosterCapacity": 4,
+		"startingBudget": 1000
+	},
+	"freeAgents": {
+		"target": 25
+	}
+}

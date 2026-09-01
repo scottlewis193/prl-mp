@@ -47,7 +47,12 @@ test(
 			const rosterRacer = await client.collection('racers').getOne('prlseedracer001');
 			const firstFreeAgent = await client.collection('racers').getOne('prlseedracer002');
 			const trainerId = rosterRacer.trainer as string;
-			await client.collection('trainers').update(trainerId, { budget: 1000, rosterCapacity: 2 });
+			const originalRosterIds = new Set(
+				(await client.collection('racers').getFullList({ filter: `trainer = "${trainerId}"` })).map(
+					({ id }) => id
+				)
+			);
+			await client.collection('trainers').update(trainerId, { budget: 1000, rosterCapacity: 4 });
 			await client.collection('racers').update(firstFreeAgent.id, {
 				race: null,
 				trainer: null,
@@ -75,7 +80,10 @@ test(
 				createdFreeAgents: 0
 			});
 
-			const signed = await client.collection('racers').getOne(firstFreeAgent.id);
+			const signed = (
+				await client.collection('racers').getFullList({ filter: `trainer = "${trainerId}"` })
+			).find(({ id }) => !originalRosterIds.has(id));
+			assert.ok(signed);
 			assert.equal(signed.trainer, trainerId);
 			assert.equal(signed.league, rosterRacer.league);
 			assert.equal(signed.financials.priceHistory.at(-1).reason.type, 'roster_change');
@@ -90,12 +98,9 @@ test(
 				1
 			);
 
-			const replacement = await client.collection('racers').getOne('prlseedracer003');
-			await client.collection('racers').update(replacement.id, {
-				race: null,
-				trainer: null,
-				league: null
-			});
+			const replacement = await client
+				.collection('racers')
+				.getFirstListItem(`trainer = "" && league = "" && id != "${signed.id}"`);
 			await client.collection('racers').update(signed.id, {
 				health: { ...signed.health, eligible: false, activeConditionIds: ['condition-1'] },
 				status: { ...signed.status, injured: true }
@@ -124,6 +129,14 @@ test(
 				(await client.collection('news').getFullList({ filter: 'category = "release"' })).length,
 				1
 			);
+			const existingFreeAgents = await client.collection('racers').getFullList({
+				filter: 'trainer = "" && league = ""'
+			});
+			for (const freeAgent of existingFreeAgents.filter(
+				({ id }) => id !== released.id && Number(id.slice(-3)) > 100
+			)) {
+				await client.collection('racers').delete(freeAgent.id);
+			}
 
 			const replenishRequest = {
 				method: 'POST',
@@ -131,8 +144,8 @@ test(
 					now: '2026-09-03T12:00:00.000Z',
 					seed: 'integration-pool-day-3',
 					trainerIds: [],
-					minimumPoolSize: 2,
-					targetPoolSize: 3
+					minimumPoolSize: 3,
+					targetPoolSize: 4
 				}
 			};
 			assert.deepEqual(await sendRosterRequest('replenish', replenishRequest), {
@@ -148,8 +161,8 @@ test(
 			const freeAgents = await client.collection('racers').getFullList({
 				filter: 'trainer = "" && league = ""'
 			});
-			assert.equal(freeAgents.length, 3);
-			assert.equal(new Set(freeAgents.map((racer) => racer.pokemon)).size, 3);
+			assert.equal(freeAgents.length, 4);
+			assert.equal(new Set(freeAgents.map((racer) => racer.pokemon)).size, 4);
 			assert.equal(
 				(await client.collection('events').getFullList({ filter: 'type = "FreeAgentCreated"' }))
 					.length,

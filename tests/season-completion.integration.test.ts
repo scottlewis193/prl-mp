@@ -50,6 +50,25 @@ test(
 				maxRanking: 8,
 				maxPlayers: 8
 			});
+			const allRacers = await client.collection('racers').getFullList({ sort: 'id' });
+			const racers = allRacers.slice(0, 24);
+			for (const standing of await client.collection('leagueStandings').getFullList({
+				filter: `season = "${season.id}"`
+			}))
+				await client.collection('leagueStandings').delete(standing.id);
+			for (const racer of allRacers) {
+				await client.collection('racers').update(racer.id, {
+					league: null,
+					race: null,
+					...(racers.includes(racer)
+						? {}
+						: { trainer: null, status: { retired: true, injured: false } })
+				});
+			}
+			for (const league of (await client.collection('leagues').getFullList()).filter(
+				(league) => league.id !== seedLeague.id
+			))
+				await client.collection('leagues').delete(league.id);
 			const challenger = await client.collection('leagues').create({
 				name: 'Challenger League',
 				prizeMoneyScaling: 1,
@@ -65,8 +84,6 @@ test(
 				maxPlayers: 8
 			});
 			const leagues = [seedLeague, challenger, academy];
-
-			const racers = await client.collection('racers').getFullList({ sort: 'id' });
 			while (racers.length < 24) {
 				const index = racers.length;
 				racers.push(
@@ -202,7 +219,10 @@ test(
 							: leagueIndex;
 				expectedLeagueByRacer.set(racers[index].id, leagues[nextLeagueIndex].id);
 			}
-			for (const racer of await client.collection('racers').getFullList({ sort: 'id' })) {
+			for (const racer of await client.collection('racers').getFullList({
+				filter: racers.map(({ id }) => `id = "${id}"`).join(' || '),
+				sort: 'id'
+			})) {
 				assert.equal(racer.league, expectedLeagueByRacer.get(racer.id));
 			}
 
