@@ -28,13 +28,20 @@ export type HealthValuationReason = {
 	appliedPercent: number;
 };
 
+export type RosterValuationReason = {
+	type: 'roster_change';
+	transition: 'signing' | 'release';
+	trainerId: string;
+	appliedPercent: number;
+};
+
 export type RacerPricePoint = {
 	timestamp: string;
 	previousPrice?: number;
 	price: number;
 	change?: number;
 	changePercent?: number;
-	reason?: string | RaceValuationReason | HealthValuationReason;
+	reason?: string | RaceValuationReason | HealthValuationReason | RosterValuationReason;
 	rulesVersion?: string;
 	sourceEvent?: string;
 };
@@ -463,6 +470,8 @@ export type TrainerType = {
 	tactics: number;
 	bond: number;
 	gender: 'male' | 'female';
+	budget: number;
+	rosterCapacity: number;
 	career: TrainerCareer;
 };
 
@@ -527,6 +536,8 @@ export class Trainer implements TrainerType {
 	tactics: number = $state(1);
 	bond: number = $state(1);
 	gender: 'male' | 'female' = $state('male');
+	budget: number = $state(0);
+	rosterCapacity: number = $state(4);
 	career: TrainerCareer = $state(createEmptyTrainerCareer());
 }
 

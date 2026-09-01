@@ -429,6 +429,9 @@ function priceReasonLabel(reason: RacerPricePoint['reason']): string {
 	if (reason.type === 'health') {
 		return ` · Health ${reason.transition} (${reason.severity})`;
 	}
+	if (reason.type === 'roster_change') {
+		return ` · Roster ${reason.transition}`;
+	}
 	return ` · Race result (${ordinal(reason.position)} of ${reason.fieldSize})`;
 }
 

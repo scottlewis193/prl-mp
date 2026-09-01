@@ -6,9 +6,17 @@ import type { Racer } from '../src/lib/types';
 
 test('selects only racers without a race assignment', () => {
 	const racers = [
-		{ id: 'available', race: '', status: { retired: false, injured: false } },
+		{
+			id: 'available',
+			race: '',
+			trainer: '',
+			league: '',
+			status: { retired: false, injured: false }
+		},
 		{ id: 'retired', race: '', status: { retired: true, injured: false } },
-		{ id: 'assigned', race: 'race-1' }
+		{ id: 'assigned', race: 'race-1' },
+		{ id: 'trained', race: '', trainer: 'trainer-1', league: 'league-1' },
+		{ id: 'league-only', race: '', trainer: '', league: 'league-1' }
 	] as Racer[];
 
 	assert.deepEqual(

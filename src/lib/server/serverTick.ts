@@ -5,6 +5,7 @@ import { buildRaceCompletion, shouldFinishRace } from './raceCompletion';
 import { reconcileLeagueSchedule } from './leagueScheduler';
 import { processRacerHealth } from './racerHealthProcessing';
 import { processRacerRetirements } from './racerRetirementProcessing';
+import { processTrainerRosters } from './rosterProcessing';
 import { getRacers } from './racers';
 import { getFinishedRaces, getRunningRaces, settleRace } from './races';
 import { getAllRacetracks } from './racetracks';
@@ -66,6 +67,14 @@ async function serverTick(): Promise<void> {
 		}
 	} catch (error) {
 		console.error('Racer retirement processing failed.', { ownerId, error });
+	}
+	try {
+		const rosters = await processTrainerRosters();
+		if (rosters.signedRacers || rosters.releasedRacers || rosters.createdFreeAgents) {
+			console.info('Trainer rosters processed.', { ownerId, ...rosters });
+		}
+	} catch (error) {
+		console.error('Trainer roster processing failed.', { ownerId, error });
 	}
 	lease = await claimSimulatorLease(ownerId, LEASE_TTL_MS);
 	if (!lease) return;
