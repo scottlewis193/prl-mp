@@ -1,6 +1,7 @@
 import type { Pokemon, Racer, Trainer } from '$lib/types';
 import pb from './pocketbase';
 import { selectUnassignedRacers } from './racerAssignment';
+import { createRacerLifecycle } from './racerLifecycle';
 import { selectRacerGender, selectRacerName } from './racerNames';
 import { deleteAllRecords } from './recordDeletion';
 
@@ -61,10 +62,16 @@ export async function createUnassignedRacers() {
 			const pokemonEntry = pokemon[index];
 			const trainer = trainers[index];
 			const gender = selectRacerGender();
+			const lifecycle = createRacerLifecycle({
+				speciesKey: String(pokemonEntry.pokedexNumber || pokemonEntry.id),
+				generationSeed: crypto.randomUUID(),
+				careerStartedAt: new Date().toISOString()
+			});
 			return pb.collection('racers').create({
 				name: selectRacerName(gender),
 				trainer: trainer.id,
 				pokemon: pokemonEntry.id,
+				...lifecycle,
 				stats: {
 					hp: pokemonEntry.hp,
 					attack: pokemonEntry.attack,

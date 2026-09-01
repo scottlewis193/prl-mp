@@ -2,6 +2,7 @@
 	import { PUBLIC_PB_URL } from '$env/static/public';
 	import ExchangeReadout from '$lib/components/ExchangeReadout.svelte';
 	import ExchangeTradeForm from '$lib/components/ExchangeTradeForm.svelte';
+	import RacerIdentityDetails from '$lib/components/RacerIdentityDetails.svelte';
 	import type { TradeOrder } from '$lib/exchangeTrade';
 	import { executeAndRefreshTrade } from '$lib/exchangeTradeClient';
 	import { getMarketSnapshot, getPriceHistoryForRange, type ChartRange } from '$lib/exchangeMarket';
@@ -207,6 +208,8 @@
 					hasPriceHistory={history.length > 0}
 					bind:selectedRange
 				/>
+
+				<RacerIdentityDetails {racer} />
 
 				{#if user?.id}
 					<ExchangeTradeForm

@@ -106,6 +106,18 @@ try {
 		league: league.id,
 		trainer: trainer.id,
 		pokemon: pokemon.id,
+		traits: {
+			durability: 50,
+			resilience: 50,
+			temperament: 50,
+			consistency: 50,
+			potential: 50,
+			longevity: 50
+		},
+		generationSeed: 'schema-test-racer',
+		traitRulesVersion: 'racer-traits-v1',
+		careerStartedAt: new Date().toISOString(),
+		careerLoad: 0,
 		stats: { speed: 10, ranking: 1 },
 		status: { retired: false, injured: false },
 		currentRace: { lapsCompleted: 0, checkpointIndex: 0, distanceFromCheckpoint: 0 },

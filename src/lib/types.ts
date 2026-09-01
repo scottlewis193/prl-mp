@@ -31,6 +31,23 @@ export type RacerPricePoint = {
 	sourceEvent?: string;
 };
 
+export type RacerTraits = {
+	durability: number;
+	resilience: number;
+	temperament: number;
+	consistency: number;
+	potential: number;
+	longevity: number;
+};
+
+export type RacerLifecycle = {
+	traits: RacerTraits;
+	generationSeed: string;
+	traitRulesVersion: string;
+	careerStartedAt: string;
+	careerLoad: number;
+};
+
 export type RaceCompetitionFormat = {
 	type: 'league_race' | 'grand_prix' | 'exhibition' | 'legends_exhibition';
 	ranked: boolean;
@@ -84,7 +101,7 @@ export class Race implements RaceType {
 	markets?: RaceType['markets'];
 }
 
-type RacerType = {
+type RacerType = RacerLifecycle & {
 	id?: string;
 	name: string;
 	race?: string;
@@ -206,6 +223,18 @@ export class Racer implements RacerType {
 	trainer: string = $state('0');
 	league: string = $state('0');
 	pokemon: string = $state('0');
+	traits: RacerTraits = $state({
+		durability: 50,
+		resilience: 50,
+		temperament: 50,
+		consistency: 50,
+		potential: 50,
+		longevity: 50
+	});
+	generationSeed: string = $state('');
+	traitRulesVersion: string = $state('racer-traits-v1');
+	careerStartedAt: string = $state('');
+	careerLoad: number = $state(0);
 	expand: {
 		race?: Race;
 		league?: League;
@@ -333,8 +362,11 @@ export type PokemonType = {
 		defense: number;
 		spAttack: number;
 		spDefense: number;
+		specialAttack?: number;
+		specialDefense?: number;
 		speed: number;
 		baseStatTotal: number;
+		total?: number;
 	};
 	moves: any[];
 
@@ -363,8 +395,11 @@ export class Pokemon implements PokemonType {
 		defense: number;
 		spAttack: number;
 		spDefense: number;
+		specialAttack?: number;
+		specialDefense?: number;
 		speed: number;
 		baseStatTotal: number;
+		total?: number;
 	} = {
 		hp: 0,
 		attack: 0,
