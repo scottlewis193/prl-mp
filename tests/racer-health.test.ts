@@ -162,6 +162,21 @@ test('health news states only linked recorded facts for onset and recovery', () 
 	assert.match(`${onset.headline} ${onset.summary}`, /Bolt.*moderate injury.*track incident/is);
 	assert.equal(recovery.category, 'health_recovery');
 	assert.match(`${recovery.headline} ${recovery.summary}`, /Bolt.*recovered.*eligible/is);
+	const partialRecovery = buildHealthStory({
+		...facts,
+		eventId: 'event-health-3',
+		occurredAt: '2026-09-10T12:00:00.000Z',
+		transition: 'recovery',
+		racer: { ...facts.racer, eligible: false }
+	});
+	assert.doesNotMatch(
+		`${partialRecovery.headline} ${partialRecovery.summary}`,
+		/cleared|returns|eligible to race/i
+	);
+	assert.match(
+		`${partialRecovery.headline} ${partialRecovery.summary}`,
+		/recovered.*unavailable.*another active condition/is
+	);
 	assert.deepEqual(onset.links, [
 		{ kind: 'racer', id: 'racer-bolt', label: 'Bolt', href: '/exchange' },
 		{ kind: 'trainer', id: 'trainer-misty', label: 'Misty', href: '/trainers' },

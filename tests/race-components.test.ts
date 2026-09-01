@@ -127,6 +127,40 @@ test('race cards show track, time or countdown, status and participant summary',
 	}
 });
 
+test('completed race cards label non-finishers with their recorded incident', async () => {
+	const { component, cleanup } = await serverComponent('RaceDiscovery');
+	try {
+		const body = render(component, {
+			props: {
+				races: [
+					{
+						...baseRace,
+						id: 'race-dnf',
+						status: 'settled',
+						startTime: '2026-08-15T12:00:00Z',
+						finishingOrder: ['racer-2'],
+						nonFinishers: [
+							{
+								racerId: 'racer-1',
+								reason: 'oil-slick',
+								summary: 'Bolt did not finish after an oil slick incident.',
+								occurredAt: '2026-08-15T12:30:00Z'
+							}
+						]
+					}
+				],
+				racers,
+				racetracks: [track]
+			}
+		}).body;
+
+		assert.match(body, /DNF[^<]*Bolt[^<]*oil slick/i);
+		assert.doesNotMatch(body, /undefined\.\s*Bolt/i);
+	} finally {
+		await cleanup();
+	}
+});
+
 test('completed race detail names the winner and displays finishing results', async () => {
 	const { component, cleanup } = await serverComponent('RaceDetail');
 	try {

@@ -90,6 +90,30 @@ routerAdd(
 				}
 				const racer = txApp.findRecordById('racers', update.id);
 				const incident = update.currentRace?.incident;
+				const significantIncidents = (update.currentRace?.significantEvents || []).filter(
+					(event) => event?.id && event.type === 'incident'
+				);
+				for (const significantIncident of significantIncidents) {
+					try {
+						txApp.findFirstRecordByFilter('events', 'idempotencyKey = {:key}', {
+							key: `race-incident:${significantIncident.id}`
+						});
+					} catch {
+						const incidentEvent = new Record(txApp.findCollectionByNameOrId('events'));
+						incidentEvent.set('type', 'RaceIncident');
+						incidentEvent.set('idempotencyKey', `race-incident:${significantIncident.id}`);
+						incidentEvent.set('occurredAt', significantIncident.occurredAt);
+						incidentEvent.set('raceIds', racer.getString('race') ? [racer.getString('race')] : []);
+						incidentEvent.set('started', true);
+						incidentEvent.set('finished', true);
+						incidentEvent.set('facts', {
+							racerId: racer.id,
+							raceId: racer.getString('race'),
+							incident: significantIncident
+						});
+						txApp.save(incidentEvent);
+					}
+				}
 				if (update.currentRace?.outcome === 'dnf' && incident?.eventId) {
 					let incidentEvent;
 					try {
@@ -561,25 +585,34 @@ routerAdd(
 			const trainerResultCollection = txApp.findCollectionByNameOrId('trainerRaceResults');
 			const affectedTrainerIds = {};
 			const trainerResultFacts = [];
-			for (const award of plan.race.awardedPrizes) {
-				const attribution = trainerByRacerId[award.racerId];
+			const awardByRacerId = {};
+			for (const award of plan.race.awardedPrizes) awardByRacerId[award.racerId] = award;
+			const orderedTrainerParticipants = [
+				...plan.race.finishingOrder.map((racerId) => participantById[racerId]),
+				...(plan.race.nonFinishers || []).map(({ racerId }) => participantById[racerId])
+			];
+			for (const participant of orderedTrainerParticipants) {
+				const award = awardByRacerId[participant.id];
+				const attribution = trainerByRacerId[participant.id];
 				const trainerId = attribution.trainerId;
 				const result = new Record(trainerResultCollection);
 				result.set('race', raceId);
-				result.set('racer', award.racerId);
+				result.set('racer', participant.id);
 				if (trainerId) result.set('trainer', trainerId);
 				result.set('attributionStatus', attribution.status);
-				result.set('position', award.position);
-				result.set('earnings', award.amount);
+				result.set('outcome', award ? 'finished' : 'dnf');
+				if (award) result.set('position', award.position);
+				result.set('earnings', award?.amount || 0);
 				result.set('occurredAt', plan.race.endTime);
 				txApp.save(result);
 				trainerResultFacts.push({
 					resultId: result.id,
-					racerId: award.racerId,
+					racerId: participant.id,
 					trainerId: trainerId || null,
 					attributionStatus: attribution.status,
-					position: award.position,
-					earnings: award.amount
+					outcome: award ? 'finished' : 'dnf',
+					...(award ? { position: award.position } : {}),
+					earnings: award?.amount || 0
 				});
 				if (trainerId) affectedTrainerIds[trainerId] = true;
 			}

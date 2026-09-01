@@ -7,18 +7,27 @@ function buildHealthStory(facts) {
 	}
 	const condition = facts.condition;
 	const recovered = facts.transition === 'recovery';
+	const eligibleAfterRecovery = facts.racer.eligible !== false;
 	const conditionText = `${condition.severity} ${condition.kind}`;
 	const summaryFact = recovered
-		? `${facts.racer.name} recovered from the ${conditionText} recorded on ${condition.onsetAt.slice(0, 10)} and is eligible to race again.`
+		? eligibleAfterRecovery
+			? `${facts.racer.name} recovered from the ${conditionText} recorded on ${condition.onsetAt.slice(0, 10)} and is eligible to race again.`
+			: `${facts.racer.name} recovered from the ${conditionText} recorded on ${condition.onsetAt.slice(0, 10)}, but remains unavailable because another active condition still affects eligibility.`
 		: condition.eligibilityEffect === 'ineligible'
 			? `${facts.racer.name} sustained a ${conditionText} caused by ${condition.cause.replaceAll('_', ' ')} and is unavailable until an expected recovery on ${condition.expectedRecoveryAt.slice(0, 10)}.`
 			: `${facts.racer.name} has a ${conditionText} caused by ${condition.cause.replaceAll('_', ' ')} but remains eligible with a temporary performance effect until an expected recovery on ${condition.expectedRecoveryAt.slice(0, 10)}.`;
 	const headlines = recovered
-		? [
-				`${facts.racer.name} cleared to race after ${condition.kind}`,
-				`${facts.racer.name} completes ${condition.kind} recovery`,
-				`${facts.racer.name} returns after ${condition.kind}`
-			]
+		? eligibleAfterRecovery
+			? [
+					`${facts.racer.name} cleared to race after ${condition.kind}`,
+					`${facts.racer.name} completes ${condition.kind} recovery`,
+					`${facts.racer.name} returns after ${condition.kind}`
+				]
+			: [
+					`${facts.racer.name} recovers from ${condition.kind}`,
+					`${facts.racer.name} completes ${condition.kind} recovery`,
+					`${facts.racer.name} recovery confirmed`
+				]
 		: [
 				`${facts.racer.name} diagnosed with ${conditionText}`,
 				`${condition.kind} sidelines ${facts.racer.name}`,

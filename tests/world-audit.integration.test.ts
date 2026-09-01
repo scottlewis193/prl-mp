@@ -72,6 +72,10 @@ test(
 				'tracks',
 				'wagers',
 				'ledger',
+				'trainer_results',
+				'standings',
+				'roster_history',
+				'health',
 				'valuation',
 				'news'
 			]);

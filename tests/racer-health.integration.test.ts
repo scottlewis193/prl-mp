@@ -152,6 +152,35 @@ test(
 					(link: { kind: string; id: string }) => link.kind === 'racer' && link.id === racerId
 				)
 			);
+			const lingeringEvent = await client.collection('events').create({
+				type: 'HealthOnset',
+				idempotencyKey: `test-lingering-condition:${racerId}`,
+				occurredAt: '2026-09-02T12:00:00.000Z',
+				started: true,
+				finished: true,
+				facts: {}
+			});
+			const lingeringCondition = await client.collection('healthConditions').create({
+				racer: racerId,
+				kind: 'injury',
+				severity: 'moderate',
+				cause: 'training_incident',
+				onsetAt: '2026-09-02T12:00:00.000Z',
+				expectedRecoveryAt: '2026-09-20T12:00:00.000Z',
+				eligibilityEffect: 'ineligible',
+				performanceMultiplier: 1,
+				inputs: { source: 'integration-test' },
+				roll: 0.1,
+				probability: 0.2,
+				rulesVersion: 'racer-health-v1',
+				sourceEvent: lingeringEvent.id
+			});
+			await client.collection('racers').update(racerId, {
+				health: {
+					...during.health,
+					activeConditionIds: [condition.id, lingeringCondition.id]
+				}
+			});
 
 			const recoveryRequest = {
 				method: 'POST',
@@ -174,11 +203,11 @@ test(
 			assert.match(recoveredCondition.recoveredAt, /^2026-09-10/);
 			const recoveredRacer = await client.collection('racers').getOne(racerId);
 			assert.deepEqual(recoveredRacer.health, {
-				eligible: true,
+				eligible: false,
 				performanceMultiplier: 1,
-				activeConditionIds: []
+				activeConditionIds: [lingeringCondition.id]
 			});
-			assert.equal(recoveredRacer.status.injured, false);
+			assert.equal(recoveredRacer.status.injured, true);
 			assert.deepEqual(recoveredRacer.raceHistory, careerHistory);
 			assert.equal(
 				recoveredRacer.financials.priceHistory.length,
@@ -190,11 +219,15 @@ test(
 					.length,
 				1
 			);
-			assert.equal(
-				(await client.collection('news').getFullList({ filter: `category = "health_recovery"` }))
-					.length,
-				1
+			const recoveryNews = await client
+				.collection('news')
+				.getFullList({ filter: `category = "health_recovery"` });
+			assert.equal(recoveryNews.length, 1);
+			assert.doesNotMatch(
+				`${recoveryNews[0].headline} ${recoveryNews[0].summary}`,
+				/cleared|returns|eligible to race/i
 			);
+			assert.match(recoveryNews[0].summary, /remains unavailable.*another active condition/i);
 		} finally {
 			if (server) await stopPocketBase(server);
 			await rm(dataDirectory, { recursive: true, force: true });

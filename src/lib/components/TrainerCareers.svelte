@@ -57,7 +57,9 @@
 											>{result.expand?.racer?.name ?? 'Unknown racer'} · {result.expand?.race
 												?.name ?? 'Race'}</span
 										>
-										<strong>#{result.position} · ₽{result.earnings}</strong>
+										<strong
+											>{result.outcome === 'dnf' ? 'DNF' : `#${result.position}`} · ₽{result.earnings}</strong
+										>
 									</li>
 								{/each}
 							</ul>

@@ -116,7 +116,16 @@
 									{#if racePresentation.results.length > 0}
 										<ol class="text-sm">
 											{#each racePresentation.results.slice(0, 3) as result}
-												<li>{result.position}. {result.racerName}</li>
+												<li>
+													{#if result.outcome === 'dnf'}
+														DNF · {result.racerName} — {result.summary ??
+															(result.reason
+																? result.reason.replaceAll('-', ' ')
+																: 'race incident')}
+													{:else}
+														{result.position}. {result.racerName}
+													{/if}
+												</li>
 											{/each}
 										</ol>
 									{/if}

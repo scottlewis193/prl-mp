@@ -16,6 +16,15 @@ test('rebuilds trainer career aggregates and recent results from durable race re
 				occurredAt: '2026-08-13T12:00:00.000Z'
 			},
 			{
+				id: 'result-dnf',
+				raceId: 'race-dnf',
+				racerId: 'racer-c',
+				trainerId: 'trainer-1',
+				outcome: 'dnf',
+				earnings: 0,
+				occurredAt: '2026-08-12T12:00:00.000Z'
+			},
+			{
 				id: 'result-new',
 				raceId: 'race-new',
 				racerId: 'racer-b',
@@ -29,7 +38,7 @@ test('rebuilds trainer career aggregates and recent results from durable race re
 	);
 
 	assert.deepEqual(career, {
-		starts: 2,
+		starts: 3,
 		wins: 1,
 		podiums: 2,
 		earnings: 16,
@@ -50,6 +59,14 @@ test('rebuilds trainer career aggregates and recent results from durable race re
 				position: 3,
 				earnings: 4,
 				occurredAt: '2026-08-13T12:00:00.000Z'
+			},
+			{
+				resultId: 'result-dnf',
+				raceId: 'race-dnf',
+				racerId: 'racer-c',
+				outcome: 'dnf',
+				earnings: 0,
+				occurredAt: '2026-08-12T12:00:00.000Z'
 			}
 		]
 	});

@@ -3,7 +3,8 @@ type TrainerRaceResultFact = {
 	raceId: string;
 	racerId: string;
 	trainerId?: string;
-	position: number;
+	outcome?: 'finished' | 'dnf';
+	position?: number;
 	earnings: number;
 	occurredAt: string;
 };

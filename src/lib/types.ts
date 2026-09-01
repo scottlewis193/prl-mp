@@ -610,7 +610,8 @@ export type TrainerRecentResult = {
 	resultId: string;
 	raceId: string;
 	racerId: string;
-	position: number;
+	outcome?: 'finished' | 'dnf';
+	position?: number;
 	earnings: number;
 	occurredAt: string;
 };
@@ -629,7 +630,8 @@ export type TrainerRaceResultFact = {
 	raceId: string;
 	racerId: string;
 	trainerId?: string;
-	position: number;
+	outcome?: 'finished' | 'dnf';
+	position?: number;
 	earnings: number;
 	occurredAt: string;
 	attributionStatus?: TrainerAttributionStatus;
@@ -654,7 +656,8 @@ export type TrainerRaceResult = {
 	racer: string;
 	trainer?: string;
 	attributionStatus: TrainerAttributionStatus;
-	position: number;
+	outcome: 'finished' | 'dnf';
+	position?: number;
 	earnings: number;
 	occurredAt: string;
 	expand?: { race?: Race; racer?: Racer; trainer?: Trainer };

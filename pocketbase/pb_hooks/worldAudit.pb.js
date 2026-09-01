@@ -45,6 +45,7 @@ routerAdd(
 				const status = jsonField(record, 'status', {});
 				const health = jsonField(record, 'health', {});
 				const financials = jsonField(record, 'financials', {});
+				const raceHistory = jsonField(record, 'raceHistory', {});
 				return {
 					id: record.id,
 					trainerId: record.getString('trainer'),
@@ -53,7 +54,8 @@ routerAdd(
 					retired: status.retired === true,
 					healthEligible: health.eligible !== false,
 					price: financials.currentSharePrice,
-					priceHistory: financials.priceHistory || []
+					priceHistory: financials.priceHistory || [],
+					raceHistory
 				};
 			}),
 			leagues: app.findAllRecords('leagues').map((record) => ({
@@ -68,12 +70,33 @@ routerAdd(
 				id: record.id,
 				seasonId: record.getString('season'),
 				leagueId: record.getString('league'),
-				racerId: record.getString('racer')
+				racerId: record.getString('racer'),
+				points: record.getFloat('points'),
+				starts: record.getInt('starts'),
+				wins: record.getInt('wins'),
+				podiums: record.getInt('podiums')
 			})),
 			races: app.findAllRecords('races').map((record) => ({
 				id: record.id,
 				status: record.getString('status'),
-				trackId: record.getString('racetrack')
+				trackId: record.getString('racetrack'),
+				seasonId: record.getString('season'),
+				awardedPrizes: jsonField(record, 'awardedPrizes', [])
+			})),
+			trainerResults: app.findAllRecords('trainerRaceResults').map((record) => ({
+				id: record.id,
+				raceId: record.getString('race'),
+				racerId: record.getString('racer'),
+				trainerId: record.getString('trainer')
+			})),
+			rosterHistory: app.findAllRecords('rosterHistory').map((record) => ({
+				id: record.id,
+				sourceEventId: record.getString('sourceEvent')
+			})),
+			healthConditions: app.findAllRecords('healthConditions').map((record) => ({
+				id: record.id,
+				sourceEventId: record.getString('sourceEvent'),
+				recoveryEventId: record.getString('recoveryEvent')
 			})),
 			tracks: app.findAllRecords('racetracks').map((record) => ({
 				id: record.id,
@@ -86,7 +109,8 @@ routerAdd(
 			wagers: app.findAllRecords('wagers').map((record) => ({
 				id: record.id,
 				raceId: record.getString('race'),
-				status: record.getString('status')
+				status: record.getString('status'),
+				idempotencyKey: record.getString('idempotencyKey')
 			})),
 			users: app.findAllRecords('users').map((record) => ({
 				id: record.id,
@@ -95,11 +119,15 @@ routerAdd(
 			ledger: app.findAllRecords('accountLedger').map((record) => ({
 				id: record.id,
 				playerId: record.getString('player'),
-				balanceDelta: record.getFloat('balanceDelta')
+				balanceDelta: record.getFloat('balanceDelta'),
+				wagerId: record.getString('wager'),
+				type: record.getString('type'),
+				sourceKey: record.getString('sourceKey')
 			})),
 			events: app.findAllRecords('events').map((record) => ({
 				id: record.id,
-				type: record.getString('type')
+				type: record.getString('type'),
+				facts: jsonField(record, 'facts', {})
 			})),
 			news: app.findAllRecords('news').map((record) => ({
 				id: record.id,

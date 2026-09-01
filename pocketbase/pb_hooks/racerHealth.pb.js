@@ -103,7 +103,11 @@ routerAdd(
 				league = { id: leagueId, name: record.getString('name') };
 			}
 			return {
-				racer: { id: racer.id, name: racer.getString('name') },
+				racer: {
+					id: racer.id,
+					name: racer.getString('name'),
+					eligible: jsonField(racer, 'health', {}).eligible !== false
+				},
 				trainer,
 				league,
 				condition: {

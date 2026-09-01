@@ -1,4 +1,4 @@
-type HealthNewsEntity = { id: string; name: string };
+type HealthNewsEntity = { id: string; name: string; eligible?: boolean };
 
 declare const healthNews: {
 	buildHealthStory(facts: {

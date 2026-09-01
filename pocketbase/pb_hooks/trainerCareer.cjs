@@ -23,21 +23,23 @@ function buildTrainerCareer(results, championships = []) {
 	});
 
 	for (const result of ordered) {
+		const isDnf = result.outcome === 'dnf';
 		if (
 			!result.id ||
 			!result.raceId ||
 			!result.racerId ||
-			!Number.isInteger(result.position) ||
-			result.position < 1 ||
+			(!isDnf && (!Number.isInteger(result.position) || result.position < 1)) ||
+			(isDnf && result.position !== undefined && result.position !== 0) ||
 			!Number.isFinite(result.earnings) ||
 			result.earnings < 0 ||
+			(isDnf && result.earnings !== 0) ||
 			!Number.isFinite(Date.parse(result.occurredAt))
 		) {
 			throw new Error('Cannot project an invalid trainer race result');
 		}
 		career.starts += 1;
-		career.wins += result.position === 1 ? 1 : 0;
-		career.podiums += result.position <= 3 ? 1 : 0;
+		career.wins += !isDnf && result.position === 1 ? 1 : 0;
+		career.podiums += !isDnf && result.position <= 3 ? 1 : 0;
 		career.earnings += result.earnings;
 	}
 
@@ -45,7 +47,7 @@ function buildTrainerCareer(results, championships = []) {
 		resultId: result.id,
 		raceId: result.raceId,
 		racerId: result.racerId,
-		position: result.position,
+		...(result.outcome === 'dnf' ? { outcome: 'dnf' } : { position: result.position }),
 		earnings: result.earnings,
 		occurredAt: result.occurredAt
 	}));
@@ -86,7 +88,8 @@ function rebuildTrainerCareer(app, trainerId) {
 		raceId: result.getString('race'),
 		racerId: result.getString('racer'),
 		trainerId,
-		position: result.getInt('position'),
+		outcome: result.getString('outcome') || 'finished',
+		...(result.getString('outcome') === 'dnf' ? {} : { position: result.getInt('position') }),
 		earnings: result.getFloat('earnings'),
 		occurredAt: result.getString('occurredAt')
 	}));

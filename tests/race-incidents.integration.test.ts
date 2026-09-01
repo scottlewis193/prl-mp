@@ -72,10 +72,50 @@ test(
 
 			const lease = (await client.send('/api/prl/simulator/lease', {
 				method: 'POST',
-				body: { ownerId: 'incident-worker', ttlMs: 5_000 }
+				body: { ownerId: 'incident-worker', ttlMs: 60_000 }
 			})) as { acquired: boolean; token: number };
 			assert.equal(lease.acquired, true);
 			const occurredAt = '2026-09-01T16:00:00.000Z';
+			const lesserIncident = {
+				id: `${raceId}:${racers[0].id}:0:2:incident`,
+				type: 'incident',
+				occurredAt: '2026-09-01T15:59:59.000Z',
+				racerId: racers[0].id,
+				racerName: racers[0].name,
+				summary: `${racers[0].name} recovered from an oil slick incident.`
+			};
+			const lesserIncidentCommit = {
+				method: 'POST',
+				body: {
+					ownerId: 'incident-worker',
+					token: lease.token,
+					racerUpdates: [
+						{
+							id: racers[0].id,
+							currentRace: {
+								...racers[0].currentRace,
+								significantEvents: [lesserIncident]
+							},
+							positioning: racers[0].positioning,
+							stats: racers[0].stats
+						}
+					]
+				}
+			};
+			assert.deepEqual(await client.send('/api/prl/simulator/commit', lesserIncidentCommit), {
+				committed: true
+			});
+			assert.deepEqual(await client.send('/api/prl/simulator/commit', lesserIncidentCommit), {
+				committed: true
+			});
+			assert.equal(
+				(
+					await client.collection('events').getFullList({
+						filter: `idempotencyKey = "race-incident:${lesserIncident.id}"`
+					})
+				).length,
+				1
+			);
 			const nonFinishers = racers.map((racer, index) => ({
 				racerId: racer.id,
 				reason: index === 0 ? 'oil-slick' : 'mechanical-failure',
@@ -135,13 +175,16 @@ test(
 				throw new Error(JSON.stringify(error));
 			}
 			assert.deepEqual(commitResult, { committed: true });
-			assert.deepEqual(
-				await client.send('/api/prl/races/settle', {
+			let settlementResult;
+			try {
+				settlementResult = await client.send('/api/prl/races/settle', {
 					method: 'POST',
 					body: { raceId }
-				}),
-				{ settled: true }
-			);
+				});
+			} catch (error) {
+				throw new Error(JSON.stringify(error));
+			}
+			assert.deepEqual(settlementResult, { settled: true });
 
 			const settledRace = await client.collection('races').getOne(raceId);
 			assert.equal(settledRace.winner, '');
@@ -166,6 +209,30 @@ test(
 				persistedRacers.map((racer) => racer.raceHistory.races.at(-1)?.outcome),
 				['dnf', 'dnf']
 			);
+			const trainerResults = await client.collection('trainerRaceResults').getFullList({
+				filter: `race = "${raceId}"`,
+				sort: 'racer'
+			});
+			assert.equal(trainerResults.length, racers.length);
+			assert.ok(
+				trainerResults.every(
+					(result) => result.outcome === 'dnf' && result.position === 0 && result.earnings === 0
+				)
+			);
+			const attributedStarts = trainerResults.filter((result) => result.trainer).length;
+			const trainerIds = [
+				...new Set(trainerResults.map((result) => result.trainer).filter(Boolean))
+			];
+			const trainers = await Promise.all(
+				trainerIds.map((trainerId) => client.collection('trainers').getOne(trainerId))
+			);
+			assert.equal(
+				trainers.reduce((starts, trainer) => starts + trainer.career.starts, 0),
+				attributedStarts
+			);
+			assert.ok(trainers.every((trainer) => trainer.career.wins === 0));
+			assert.ok(trainers.every((trainer) => trainer.career.podiums === 0));
+			assert.ok(trainers.every((trainer) => trainer.career.earnings === 0));
 			const settlementEvent = await client
 				.collection('events')
 				.getFirstListItem(`idempotencyKey = "race-settled:${raceId}"`);
