@@ -58,6 +58,13 @@ routerAdd(
 			}
 
 			const race = txApp.findRecordById('races', raceId);
+			let wageringPolicy = {};
+			try {
+				wageringPolicy = JSON.parse(toString(race.get('wageringPolicy'))) || {};
+			} catch {}
+			if (wageringPolicy.enabled !== true || !wageringPolicy.markets?.includes(marketType)) {
+				throw e.badRequestError('Wagering is unavailable for this race format.', {});
+			}
 			if (!['pending', 'countdown'].includes(race.getString('status'))) {
 				throw e.badRequestError('Betting is closed for this race.', {});
 			}

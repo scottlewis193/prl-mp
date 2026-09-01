@@ -103,6 +103,21 @@ test(
 				rulesVersion: season.rulesVersion
 			});
 			assert.deepEqual(rankedRace.pointsCurve, season.pointsCurve);
+			assert.deepEqual(rankedRace.eligibilityPolicy, {
+				activeOnly: true,
+				healthEligible: true,
+				leagueId,
+				retired: false,
+				trainerRequired: true
+			});
+			assert.equal(rankedRace.prizeScale, 2);
+			assert.deepEqual(rankedRace.movePolicy, {
+				enabled: false,
+				rulesVersion: 'moves-disabled-v1'
+			});
+			assert.deepEqual(rankedRace.wageringPolicy, { enabled: true, markets: ['winner'] });
+			assert.equal(rankedRace.riskPolicy.level, 'standard');
+			assert.equal(rankedRace.riskPolicy.incidentMultiplier, 1);
 			assert.deepEqual(
 				rankedRace.prizeCurve,
 				Array.from({ length: racers.length }, (_, index) => (racers.length - index) * 2)

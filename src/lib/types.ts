@@ -86,6 +86,22 @@ export type RaceCompetitionFormat = {
 	rulesVersion: string;
 };
 
+export type RaceEligibilityPolicy = {
+	activeOnly: boolean;
+	healthEligible: boolean;
+	leagueId: string;
+	retired: boolean;
+	trainerRequired: boolean;
+};
+
+export type RaceMovePolicy = { enabled: boolean; rulesVersion: string };
+export type RaceRiskPolicy = {
+	level: 'low' | 'standard' | 'high';
+	incidentMultiplier: number;
+	trackRisk: number;
+};
+export type RaceWageringPolicy = { enabled: boolean; markets: Array<'winner'> };
+
 export type RaceType = {
 	id?: string;
 	name: string;
@@ -94,11 +110,16 @@ export type RaceType = {
 	season?: string;
 	format?: RaceFormat;
 	raceFormat?: RaceCompetitionFormat;
+	eligibilityPolicy?: RaceEligibilityPolicy;
 	racetrack: string;
 	winner: string;
 	finishingOrder: string[];
 	prizeCurve?: number[];
 	pointsCurve?: number[];
+	prizeScale?: number;
+	movePolicy?: RaceMovePolicy;
+	riskPolicy?: RaceRiskPolicy;
+	wageringPolicy?: RaceWageringPolicy;
 	awardedPrizes?: AwardedPrize[];
 	startTime: Date;
 	endTime: Date;
@@ -118,13 +139,28 @@ export class Race implements RaceType {
 	status: 'pending' | 'countdown' | 'running' | 'finished' | 'cancelled' | 'settled' = 'pending';
 	league?: string;
 	season?: string;
-	format?: RaceFormat;
-	raceFormat?: RaceCompetitionFormat;
+	format?: RaceFormat = 'circuit';
+	raceFormat?: RaceCompetitionFormat = {
+		type: 'league_race',
+		ranked: true,
+		rulesVersion: 'league-race-v1'
+	};
+	eligibilityPolicy?: RaceEligibilityPolicy = {
+		activeOnly: true,
+		healthEligible: true,
+		leagueId: '',
+		retired: false,
+		trainerRequired: true
+	};
 	racetrack: string = '175hl67e5pvjjib';
 	winner: string = '';
 	finishingOrder: string[] = [];
 	prizeCurve?: number[] = [];
 	pointsCurve?: number[] = [];
+	prizeScale?: number = 0;
+	movePolicy?: RaceMovePolicy = { enabled: false, rulesVersion: 'moves-disabled-v1' };
+	riskPolicy?: RaceRiskPolicy = { level: 'standard', incidentMultiplier: 1, trackRisk: 0 };
+	wageringPolicy?: RaceWageringPolicy = { enabled: false, markets: [] };
 	awardedPrizes?: AwardedPrize[] = [];
 	startTime: Date = new Date();
 	totalLaps: number = 99;
@@ -665,7 +701,7 @@ export type Wager = {
 
 export type EventType = {
 	id: string;
-	type: 'DailyLeagueRaces' | 'RaceSettled' | 'HealthOnset' | 'HealthRecovery';
+	type: 'DailyLeagueRaces' | 'ExhibitionRace' | 'RaceSettled' | 'HealthOnset' | 'HealthRecovery';
 	scheduleKey?: string;
 	startTime?: Date;
 	idempotencyKey?: string;

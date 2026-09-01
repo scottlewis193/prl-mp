@@ -16,6 +16,7 @@ type RaceResult = {
 
 export type RacePresentation = {
 	race: Race;
+	formatLabel: string;
 	trackName: string;
 	trackCharacteristics: ReturnType<typeof presentTrackCharacteristics> | undefined;
 	participants: Racer[];
@@ -24,6 +25,15 @@ export type RacePresentation = {
 	prizeStructure: { position: number; amount: number }[];
 	results: RaceResult[];
 };
+
+export function raceFormatLabel(format: Race['raceFormat']): string {
+	return {
+		league_race: 'League Race',
+		grand_prix: 'Grand Prix',
+		exhibition: 'Exhibition Race',
+		legends_exhibition: 'Legends Exhibition'
+	}[format?.type ?? 'league_race'];
+}
 
 const titleCase = (value: string) =>
 	value
@@ -85,6 +95,7 @@ export function presentRace(
 	const track = tracks.find((candidate) => candidate.id === race.racetrack);
 	return {
 		race,
+		formatLabel: raceFormatLabel(race.raceFormat),
 		trackName: track?.name ?? 'Unknown track',
 		trackCharacteristics: track ? presentTrackCharacteristics(track) : undefined,
 		participants,

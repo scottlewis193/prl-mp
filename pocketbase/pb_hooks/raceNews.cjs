@@ -24,6 +24,10 @@ function buildRaceResultStory(facts) {
 		? `${runnerUp.name} finished second`
 		: `${facts.winner.name} led the field`;
 	const leagueText = ` in the ${facts.league.name}`;
+	const formatText =
+		facts.race.format === 'exhibition'
+			? ' This unranked Exhibition Race awarded reduced prizes.'
+			: '';
 	const winnerMovement = (facts.priceMovements || []).find(
 		(movement) => movement.racer?.id === facts.winner.id
 	);
@@ -33,15 +37,15 @@ function buildRaceResultStory(facts) {
 	const templates = [
 		{
 			headline: `${facts.winner.name} wins ${facts.race.name}`,
-			summary: `${facts.winner.name} took victory in ${facts.race.name} at ${facts.track.name}${leagueText}; ${fieldText}.${marketText}`
+			summary: `${facts.winner.name} took victory in ${facts.race.name} at ${facts.track.name}${leagueText}; ${fieldText}.${formatText}${marketText}`
 		},
 		{
 			headline: `${facts.race.name} belongs to ${facts.winner.name}`,
-			summary: `At ${facts.track.name}, ${facts.winner.name} won ${facts.race.name}${leagueText}; ${fieldText}.${marketText}`
+			summary: `At ${facts.track.name}, ${facts.winner.name} won ${facts.race.name}${leagueText}; ${fieldText}.${formatText}${marketText}`
 		},
 		{
 			headline: `${facts.winner.name} takes the chequered flag`,
-			summary: `${facts.race.name} ended with ${facts.winner.name} first at ${facts.track.name}${leagueText}; ${fieldText}.${marketText}`
+			summary: `${facts.race.name} ended with ${facts.winner.name} first at ${facts.track.name}${leagueText}; ${fieldText}.${formatText}${marketText}`
 		}
 	];
 	const selected = templates[stableTemplateIndex(facts.eventId, templates.length)];

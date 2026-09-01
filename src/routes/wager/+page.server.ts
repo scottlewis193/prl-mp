@@ -24,7 +24,7 @@ export const load = async ({ locals }) => {
 				{ now }
 			),
 			sort: 'startTime',
-			fields: 'id,name,status,startTime,bettingCutoff,markets'
+			fields: 'id,name,status,startTime,bettingCutoff,markets,raceFormat,wageringPolicy'
 		}),
 		locals.pb.collection('racers').getFullList({
 			filter: 'race != ""',
@@ -35,6 +35,8 @@ export const load = async ({ locals }) => {
 
 	const eligibleRaces = races.filter(
 		(race) =>
+			race.wageringPolicy?.enabled === true &&
+			race.wageringPolicy?.markets?.includes('winner') &&
 			race.markets?.winnerType === 'winner' &&
 			Array.isArray(race.markets?.winnerSelections) &&
 			race.markets.winnerSelections.length >= 2

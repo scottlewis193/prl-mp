@@ -91,6 +91,7 @@ test('race presentation resolves track, participants, winner and finishing resul
 
 	assert.deepEqual(presentRace(completed, racers, [track]), {
 		race: completed,
+		formatLabel: 'League Race',
 		trackName: 'Indigo Circuit',
 		trackCharacteristics,
 		participants: [racers[2], racers[0]],
@@ -120,6 +121,7 @@ test('race presentation treats a null PocketBase finishing order as no results',
 
 	assert.deepEqual(presentRace(pending, racers, [track]), {
 		race: pending,
+		formatLabel: 'League Race',
 		trackName: 'Indigo Circuit',
 		trackCharacteristics,
 		participants: [],

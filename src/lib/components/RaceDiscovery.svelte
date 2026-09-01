@@ -81,6 +81,9 @@
 									<div class="flex items-start justify-between gap-3">
 										<div>
 											<h3 class="card-title">{race.name}</h3>
+											<p class="text-primary text-xs font-semibold uppercase">
+												{racePresentation.formatLabel}
+											</p>
 											<p class="text-sm opacity-70">{racePresentation.trackName}</p>
 											{#if racePresentation.trackCharacteristics}
 												<p class="text-xs opacity-60">

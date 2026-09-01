@@ -29,6 +29,7 @@
 		<div class="flex flex-wrap items-start justify-between gap-3">
 			<div>
 				<h1 class="text-3xl font-bold">{race.name}</h1>
+				<p class="text-primary mt-1 font-semibold">{racePresentation.formatLabel}</p>
 				<p class="mt-1 opacity-70">{racePresentation.trackName}</p>
 			</div>
 			<span class="badge badge-lg badge-soft">{raceStatusLabel(race.status)}</span>
@@ -39,6 +40,44 @@
 			{racePresentation.participantCount === 1 ? 'participant' : 'participants'}
 		</p>
 	</header>
+
+	<section aria-labelledby="race-policy-heading">
+		<h2 id="race-policy-heading" class="mb-3 text-xl font-semibold">Race consequences</h2>
+		<dl class="rounded-box border-base-300 bg-base-200 grid gap-4 border p-4 sm:grid-cols-2">
+			<div>
+				<dt class="text-sm opacity-70">Ranking</dt>
+				<dd>{race.raceFormat?.ranked ? 'Awards league points' : 'Unranked — no league points'}</dd>
+			</div>
+			<div>
+				<dt class="text-sm opacity-70">Eligibility</dt>
+				<dd>
+					{race.eligibilityPolicy?.healthEligible ? 'Eligible active racers' : 'Format policy'}
+				</dd>
+			</div>
+			<div>
+				<dt class="text-sm opacity-70">Moves</dt>
+				<dd>{race.movePolicy?.enabled ? 'Enabled' : 'Disabled'}</dd>
+			</div>
+			<div>
+				<dt class="text-sm opacity-70">Prize scale</dt>
+				<dd>
+					{race.raceFormat?.type === 'exhibition' ? 'Reduced ' : ''}{race.prizeScale ?? 0}× format
+					scale
+				</dd>
+			</div>
+			<div>
+				<dt class="text-sm opacity-70">Risk policy</dt>
+				<dd>
+					{race.riskPolicy?.level ?? 'Standard'} ·
+					{Math.round((race.riskPolicy?.incidentMultiplier ?? 1) * 100)}% incident multiplier
+				</dd>
+			</div>
+			<div>
+				<dt class="text-sm opacity-70">Wagering</dt>
+				<dd>{race.wageringPolicy?.enabled ? 'Winner market available' : 'Not offered'}</dd>
+			</div>
+		</dl>
+	</section>
 
 	<section aria-labelledby="track-characteristics-heading">
 		<h2 id="track-characteristics-heading" class="mb-3 text-xl font-semibold">

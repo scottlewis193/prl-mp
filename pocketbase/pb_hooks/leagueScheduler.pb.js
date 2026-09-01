@@ -34,6 +34,15 @@ routerAdd(
 			return Number(stats.ranking) || 0;
 		};
 		const exposeWinnerMarket = (race, racers, cutoff) => {
+			let wageringPolicy = {};
+			try {
+				wageringPolicy = JSON.parse(toString(race.get('wageringPolicy'))) || {};
+			} catch {}
+			if (wageringPolicy.enabled !== true || !wageringPolicy.markets?.includes('winner')) {
+				race.set('bettingCutoff', null);
+				race.set('markets', {});
+				return;
+			}
 			race.set('bettingCutoff', cutoff);
 			if (racers.length < 2) {
 				race.set('markets', {});
@@ -53,12 +62,13 @@ routerAdd(
 		const snapshotPrizeCurve = (race, entrantCount, scale) => {
 			const places = Math.max(0, entrantCount);
 			const safeScale = Math.max(0, scale);
+			race.set('prizeScale', safeScale);
 			race.set(
 				'prizeCurve',
 				Array.from({ length: places }, (_, index) => (places - index) * safeScale)
 			);
 		};
-		const snapshotLeagueRace = (race, season) => {
+		const snapshotLeagueRace = (race, season, league, track) => {
 			const configuredCurve = JSON.parse(toString(season.get('pointsCurve')) || '[]');
 			if (
 				!Array.isArray(configuredCurve) ||
@@ -73,6 +83,20 @@ routerAdd(
 				rulesVersion: season.getString('rulesVersion')
 			});
 			race.set('pointsCurve', configuredCurve.map(Number));
+			race.set('eligibilityPolicy', {
+				activeOnly: true,
+				healthEligible: true,
+				leagueId: league.id,
+				retired: false,
+				trainerRequired: true
+			});
+			race.set('movePolicy', { enabled: false, rulesVersion: 'moves-disabled-v1' });
+			race.set('riskPolicy', {
+				level: 'standard',
+				incidentMultiplier: 1,
+				trackRisk: track.getFloat('risk')
+			});
+			race.set('wageringPolicy', { enabled: true, markets: ['winner'] });
 		};
 		const ensureSeasonStanding = (txApp, seasonId, racer) => {
 			try {
@@ -239,7 +263,11 @@ routerAdd(
 								scheduledRacers.splice(index, 1);
 							}
 							const league = leagueById[race.getString('league')];
-							if (league) {
+							let racePolicy = {};
+							try {
+								racePolicy = JSON.parse(toString(race.get('raceFormat'))) || {};
+							} catch {}
+							if (league && racePolicy.type === 'league_race') {
 								const capacity = Math.max(1, league.getInt('maxPlayers'));
 								const backfill = takeAvailableRacers(league.id, capacity - scheduledRacers.length);
 								for (const racer of backfill) {
@@ -374,7 +402,7 @@ routerAdd(
 						race.set('racetrack', selectedTrack.id);
 						race.set('startTime', new Date(slotMs).toISOString());
 						race.set('totalLaps', totalLaps);
-						snapshotLeagueRace(race, activeSeason);
+						snapshotLeagueRace(race, activeSeason, league, selectedTrack.record);
 						snapshotPrizeCurve(race, capacity, league.getFloat('prizeMoneyScaling'));
 						exposeWinnerMarket(race, selected, new Date(slotMs).toISOString());
 						txApp.save(race);

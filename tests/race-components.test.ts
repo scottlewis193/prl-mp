@@ -213,3 +213,44 @@ test('scheduled race detail displays its snapshotted prize structure', async () 
 		await cleanup();
 	}
 });
+
+test('discovery and detail clearly identify an unranked Exhibition Race and its consequences', async () => {
+	const exhibition = {
+		...baseRace,
+		id: 'race-exhibition',
+		name: 'Premier Showcase',
+		status: 'pending',
+		startTime: '2026-08-16T12:00:00Z',
+		raceFormat: { type: 'exhibition', ranked: false, rulesVersion: 'exhibition-race-v1' },
+		eligibilityPolicy: {
+			activeOnly: true,
+			healthEligible: true,
+			leagueId: 'league-1',
+			retired: false,
+			trainerRequired: true
+		},
+		movePolicy: { enabled: false, rulesVersion: 'moves-disabled-v1' },
+		prizeScale: 0.25,
+		riskPolicy: { level: 'low', incidentMultiplier: 0.5, trackRisk: 0.15 },
+		wageringPolicy: { enabled: false, markets: [] }
+	};
+	const discovery = await serverComponent('RaceDiscovery');
+	const detail = await serverComponent('RaceDetail');
+	try {
+		const card = render(discovery.component, {
+			props: { races: [exhibition], racers, racetracks: [track] }
+		}).body;
+		const page = render(detail.component, {
+			props: { race: exhibition, racers, racetrack: track }
+		}).body;
+		assert.match(card, /Exhibition Race/i);
+		assert.match(page, /Exhibition Race/i);
+		assert.match(page, /Unranked.*no league points/i);
+		assert.match(page, /Prize scale[\s\S]*Reduced 0\.25× format\s+scale/i);
+		assert.match(page, /Risk policy[\s\S]*low[\s\S]*50% incident multiplier/i);
+		assert.match(page, /Wagering[\s\S]*Not offered/i);
+	} finally {
+		await discovery.cleanup();
+		await detail.cleanup();
+	}
+});

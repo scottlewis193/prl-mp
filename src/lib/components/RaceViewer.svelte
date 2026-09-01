@@ -8,6 +8,7 @@
 	import type { Camera } from '$lib/types';
 	import { getUserContext } from '$lib/stores/user.svelte';
 	import { getLeadingRacer } from '$lib/raceProgress';
+	import { raceFormatLabel } from '$lib/raceDiscovery';
 
 	const _race = getCurrentRaceContext();
 	const _racers = getCurrentRacersContext();
@@ -27,6 +28,9 @@
 
 {#if _race}
 	<div class="h-full w-full">
+		<div class="badge badge-primary absolute top-2 left-2 z-[1000]">
+			{raceFormatLabel(_race.raceFormat)}
+		</div>
 		<LeaderBoard />
 
 		<PixiTrackRenderer />

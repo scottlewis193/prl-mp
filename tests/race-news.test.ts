@@ -65,3 +65,12 @@ test('different source events select varied templates without inventing source f
 		);
 	}
 });
+
+test('exhibition result news states its unranked lower-prize format', () => {
+	const story = buildRaceResultStory({
+		...facts,
+		race: { ...facts.race, format: 'exhibition' }
+	});
+
+	assert.match(story.summary, /unranked Exhibition Race.*reduced prizes/i);
+});

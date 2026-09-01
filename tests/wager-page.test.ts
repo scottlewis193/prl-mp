@@ -44,6 +44,7 @@ test('wager page shows eligible markets plus open and historical player wagers',
 						{
 							id: 'race-1',
 							name: 'Premier Cup',
+							wageringPolicy: { enabled: true, markets: ['winner'] },
 							bettingCutoff: '2026-08-15T14:00:00.000Z',
 							markets: {
 								winnerType: 'winner',

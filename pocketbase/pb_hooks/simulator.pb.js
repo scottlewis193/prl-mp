@@ -482,6 +482,7 @@ routerAdd(
 			};
 			settlementEvent.set('facts', {
 				raceId,
+				raceFormat,
 				winnerId: plan.race.winner,
 				finishingOrder: plan.race.finishingOrder,
 				awardedPrizes: plan.race.awardedPrizes,
@@ -496,6 +497,7 @@ routerAdd(
 				eventId: settlementEvent.id,
 				occurredAt: plan.race.endTime,
 				...newsContext,
+				race: { ...newsContext.race, format: raceFormat.type || 'league_race' },
 				priceMovements: priceMovements.map((movement) => ({
 					...movement,
 					racer: {

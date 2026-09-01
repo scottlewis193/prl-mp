@@ -2,7 +2,7 @@ type NewsEntity = { id: string; name: string };
 type RaceResultFacts = {
 	eventId: string;
 	occurredAt: string;
-	race: NewsEntity;
+	race: NewsEntity & { format?: string };
 	winner: NewsEntity;
 	finishers: NewsEntity[];
 	trainers: NewsEntity[];
