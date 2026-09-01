@@ -27,9 +27,11 @@ function buildRaceResultStory(facts) {
 	const formatText =
 		facts.race.format === 'exhibition'
 			? ' This unranked Exhibition Race awarded reduced prizes.'
-			: facts.race.format === 'grand_prix'
-				? ' This multi-class Grand Prix scored each racer within their league class.'
-				: '';
+			: facts.race.format === 'legends_exhibition'
+				? ' This unranked Legends Exhibition brought retired racers back for a special event.'
+				: facts.race.format === 'grand_prix'
+					? ' This multi-class Grand Prix scored each racer within their league class.'
+					: '';
 	const winnerMovement = (facts.priceMovements || []).find(
 		(movement) => movement.racer?.id === facts.winner.id
 	);

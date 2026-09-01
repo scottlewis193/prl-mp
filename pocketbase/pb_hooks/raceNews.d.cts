@@ -2,7 +2,9 @@ type NewsEntity = { id: string; name: string };
 type RaceResultFacts = {
 	eventId: string;
 	occurredAt: string;
-	race: NewsEntity & { format?: string };
+	race: NewsEntity & {
+		format?: 'league_race' | 'grand_prix' | 'exhibition' | 'legends_exhibition';
+	};
 	winner: NewsEntity;
 	finishers: NewsEntity[];
 	trainers: NewsEntity[];

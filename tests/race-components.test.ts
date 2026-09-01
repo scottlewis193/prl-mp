@@ -255,6 +255,53 @@ test('discovery and detail clearly identify an unranked Exhibition Race and its 
 	}
 });
 
+test('discovery and detail identify retired-only Legends Exhibition consequences', async () => {
+	const legendsExhibition = {
+		...baseRace,
+		id: 'race-legends',
+		name: 'Champion Reunion',
+		status: 'pending',
+		startTime: '2026-08-16T12:00:00Z',
+		raceFormat: {
+			type: 'legends_exhibition',
+			ranked: false,
+			rulesVersion: 'legends-exhibition-v1'
+		},
+		eligibilityPolicy: {
+			activeOnly: false,
+			healthEligible: false,
+			leagueId: 'league-1',
+			retired: true,
+			trainerRequired: false
+		},
+		movePolicy: { enabled: false, rulesVersion: 'moves-disabled-v1' },
+		prizeScale: 0.1,
+		riskPolicy: { level: 'low', incidentMultiplier: 0.25, trackRisk: 0.15 },
+		wageringPolicy: { enabled: false, markets: [] }
+	};
+	const discovery = await serverComponent('RaceDiscovery');
+	const detail = await serverComponent('RaceDetail');
+	try {
+		const card = render(discovery.component, {
+			props: { races: [legendsExhibition], racers, racetracks: [track] }
+		}).body;
+		const page = render(detail.component, {
+			props: { race: legendsExhibition, racers, racetrack: track }
+		}).body;
+		assert.match(card, /Legends Exhibition/i);
+		assert.match(page, /Legends Exhibition/i);
+		assert.match(page, /Retired racers only/i);
+		assert.match(page, /Unranked.*no league points/i);
+		assert.match(page, /Prize scale[\s\S]*Reduced 0\.1× format\s+scale/i);
+		assert.match(page, /Risk policy[\s\S]*low[\s\S]*25% incident multiplier/i);
+		assert.match(page, /Moves[\s\S]*Disabled/i);
+		assert.match(page, /Wagering[\s\S]*Not offered/i);
+	} finally {
+		await discovery.cleanup();
+		await detail.cleanup();
+	}
+});
+
 test('Grand Prix detail distinguishes overall and class finishing positions', async () => {
 	const grandPrix = {
 		...baseRace,

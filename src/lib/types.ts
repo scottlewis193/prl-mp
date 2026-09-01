@@ -716,6 +716,7 @@ export type EventType = {
 	type:
 		| 'DailyLeagueRaces'
 		| 'ExhibitionRace'
+		| 'LegendsExhibition'
 		| 'GrandPrix'
 		| 'RaceSettled'
 		| 'HealthOnset'

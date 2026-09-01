@@ -247,6 +247,10 @@ routerAdd(
 						let nextStatus = currentStatus;
 						let scheduledRacers;
 						if (currentStatus === 'pending' || currentStatus === 'countdown') {
+							let racePolicy = {};
+							try {
+								racePolicy = JSON.parse(toString(race.get('raceFormat'))) || {};
+							} catch {}
 							scheduledRacers = txApp.findRecordsByFilter(
 								'racers',
 								'race = {:raceId}',
@@ -257,16 +261,18 @@ routerAdd(
 							);
 							for (let index = scheduledRacers.length - 1; index >= 0; index -= 1) {
 								const racer = scheduledRacers[index];
-								if (schedulerEligible(racer)) continue;
+								const eligible =
+									racePolicy.type === 'legends_exhibition'
+										? schedulerStatus(racer).retired &&
+											!racer.getString('trainer') &&
+											!racer.getString('league')
+										: schedulerEligible(racer);
+								if (eligible) continue;
 								racer.set('race', null);
 								txApp.save(racer);
 								scheduledRacers.splice(index, 1);
 							}
 							const league = leagueById[race.getString('league')];
-							let racePolicy = {};
-							try {
-								racePolicy = JSON.parse(toString(race.get('raceFormat'))) || {};
-							} catch {}
 							if (league && racePolicy.type === 'league_race') {
 								const capacity = Math.max(1, league.getInt('maxPlayers'));
 								const backfill = takeAvailableRacers(league.id, capacity - scheduledRacers.length);

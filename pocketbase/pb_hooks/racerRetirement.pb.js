@@ -151,9 +151,18 @@ onRecordUpdateRequest((e) => {
 	const originalStatus = jsonField(e.record.original(), 'status', { retired: false });
 	if (originalStatus.retired) {
 		const nextStatus = jsonField(e.record, 'status', { retired: false });
+		const nextRaceId = e.record.getString('race');
+		let enteringLegendsExhibition = false;
+		if (nextRaceId) {
+			try {
+				const race = e.app.findRecordById('races', nextRaceId);
+				const raceFormat = jsonField(race, 'raceFormat', {});
+				enteringLegendsExhibition = raceFormat.type === 'legends_exhibition';
+			} catch {}
+		}
 		if (
 			!nextStatus.retired ||
-			e.record.getString('race') ||
+			(nextRaceId && !enteringLegendsExhibition) ||
 			e.record.getString('trainer') ||
 			e.record.getString('league')
 		) {

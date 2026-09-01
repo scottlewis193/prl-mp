@@ -51,7 +51,11 @@
 			<div>
 				<dt class="text-sm opacity-70">Eligibility</dt>
 				<dd>
-					{race.eligibilityPolicy?.healthEligible ? 'Eligible active racers' : 'Format policy'}
+					{race.eligibilityPolicy?.retired
+						? 'Retired racers only'
+						: race.eligibilityPolicy?.healthEligible
+							? 'Eligible active racers'
+							: 'Format policy'}
 				</dd>
 			</div>
 			<div>
@@ -61,8 +65,9 @@
 			<div>
 				<dt class="text-sm opacity-70">Prize scale</dt>
 				<dd>
-					{race.raceFormat?.type === 'exhibition' ? 'Reduced ' : ''}{race.prizeScale ?? 0}× format
-					scale
+					{race.raceFormat?.type === 'exhibition' || race.raceFormat?.type === 'legends_exhibition'
+						? 'Reduced '
+						: ''}{race.prizeScale ?? 0}× format scale
 				</dd>
 			</div>
 			<div>
