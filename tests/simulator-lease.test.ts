@@ -63,7 +63,7 @@ async function rebuildTrainerCareers(client: PocketBase) {
 async function reconcileSchedule(
 	client: PocketBase,
 	now: string,
-	overrides: Record<string, number> = {}
+	overrides: Record<string, unknown> = {}
 ) {
 	return client.send('/api/prl/schedule/reconcile', {
 		method: 'POST',
@@ -143,10 +143,31 @@ after(async () => {
 	await rm(dataDirectory, { recursive: true, force: true });
 });
 
-test('migrates both tracks and initializes the Coastal Loop live viewer through shared contracts', async () => {
+test('migrates five distinct tracks through the shared simulation and rendering contracts', async () => {
 	const tracks = await firstWorker.collection('racetracks').getFullList({ sort: 'id' });
-	assert.equal(tracks.length, 2);
-	assert.deepEqual(tracks.map((track) => track.name).sort(), ['Coastal Loop', 'Default Track']);
+	assert.equal(tracks.length, 5);
+	assert.deepEqual(tracks.map((track) => track.name).sort(), [
+		'Alpine Switchback',
+		'Coastal Loop',
+		'Default Track',
+		'Forest Chicane',
+		'Red Canyon Ring'
+	]);
+	assert.equal(new Set(tracks.map((track) => JSON.stringify(track.checkpoints))).size, 5);
+	assert.equal(
+		new Set(
+			tracks.map((track) =>
+				JSON.stringify({
+					surface: track.surface,
+					corneringDemand: track.corneringDemand,
+					speedBias: track.speedBias,
+					risk: track.risk,
+					hazards: track.hazards
+				})
+			)
+		).size,
+		5
+	);
 	for (const track of tracks) {
 		assert.equal(track.length > 0, true);
 		assert.equal(track.width > 0, true);
@@ -880,7 +901,9 @@ test('maintains the configured event pipeline without duplicate or overlapping a
 	const entryUntrainedOriginalTrainer = entryUntrainedRacer.trainer;
 	await firstWorker.collection('racers').update(entryUntrainedRacer.id, { trainer: null });
 
-	const firstRun = await reconcileSchedule(firstWorker, '2026-08-14T12:05:00.000Z');
+	const firstRun = await reconcileSchedule(firstWorker, '2026-08-14T12:05:00.000Z', {
+		schedulingSeed: 'B'
+	});
 	assert.deepEqual(firstRun, {
 		createdEvents: 2,
 		createdRaces: 10,
@@ -912,6 +935,32 @@ test('maintains the configured event pipeline without duplicate or overlapping a
 	assert.deepEqual(
 		events.map((event) => new Date(event.startTime).toISOString()),
 		['2026-08-14T13:00:00.000Z', '2026-08-14T14:00:00.000Z']
+	);
+	const scheduledRotation = await Promise.all(
+		events
+			.flatMap((event) => event.raceIds)
+			.map((raceId) => firstWorker.collection('races').getOne(raceId))
+	);
+	assert.deepEqual(
+		scheduledRotation.map((race) => race.racetrack),
+		[
+			'175hl67e5pvjjib',
+			'prlalpinetrack1',
+			'prlcanyontrack1',
+			'prlcoasttrack01',
+			'prlforesttrack1',
+			'prlalpinetrack1',
+			'prlcanyontrack1',
+			'prlcoasttrack01',
+			'prlforesttrack1',
+			'175hl67e5pvjjib'
+		]
+	);
+	assert.equal(
+		scheduledRotation.some(
+			(race, index, rotation) => race.racetrack === rotation[index - 1]?.racetrack
+		),
+		false
 	);
 	assert.equal(races.length, 2);
 	assert.equal(new Set(races.map((race) => race.racetrack)).size, 2);

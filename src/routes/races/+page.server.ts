@@ -7,7 +7,10 @@ export const load = async ({ locals }) => {
 			batch: 1000,
 			fields: 'id,name,race'
 		}),
-		locals.pb.collection('racetracks').getFullList({ fields: 'id,name' })
+		locals.pb.collection('racetracks').getFullList({
+			fields:
+				'id,name,length,totalLength,width,surface,hazards,corneringDemand,speedBias,risk,compatibleFormats'
+		})
 	]);
 
 	return {

@@ -17,6 +17,7 @@ type RaceResult = {
 export type RacePresentation = {
 	race: Race;
 	trackName: string;
+	trackCharacteristics: ReturnType<typeof presentTrackCharacteristics> | undefined;
 	participants: Racer[];
 	participantCount: number;
 	winnerName: string | undefined;
@@ -81,9 +82,11 @@ export function presentRace(
 	const prizeByRacer = new Map(
 		(race.awardedPrizes ?? []).map((prize) => [prize.racerId, prize.amount])
 	);
+	const track = tracks.find((candidate) => candidate.id === race.racetrack);
 	return {
 		race,
-		trackName: tracks.find((track) => track.id === race.racetrack)?.name ?? 'Unknown track',
+		trackName: track?.name ?? 'Unknown track',
+		trackCharacteristics: track ? presentTrackCharacteristics(track) : undefined,
 		participants,
 		participantCount: participants.length,
 		winnerName: race.winner ? (racerById.get(race.winner)?.name ?? 'Unknown racer') : undefined,

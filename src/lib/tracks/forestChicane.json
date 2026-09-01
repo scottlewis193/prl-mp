@@ -1,0 +1,50 @@
+{
+	"height": 6,
+	"infinite": false,
+	"layers": [
+		{
+			"data": [
+				2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816,
+				2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816,
+				2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816, 2816,
+				2816, 2816, 2816
+			],
+			"height": 6,
+			"name": "Forest Ground",
+			"type": "tilelayer",
+			"width": 8,
+			"x": 0,
+			"y": 0
+		},
+		{
+			"name": "Checkpoints",
+			"objects": [
+				{ "name": "0", "x": 16, "y": 48 },
+				{ "name": "1", "x": 48, "y": 16 },
+				{ "name": "2", "x": 80, "y": 48 },
+				{ "name": "3", "x": 112, "y": 80 },
+				{ "name": "4", "x": 48, "y": 80 },
+				{ "name": "5", "x": 16, "y": 48 }
+			],
+			"type": "objectgroup"
+		}
+	],
+	"orientation": "orthogonal",
+	"tileheight": 16,
+	"tilesets": [
+		{
+			"columns": 140,
+			"firstgid": 1,
+			"image": "/pokemon_tileset.png",
+			"imageheight": 2700,
+			"imagewidth": 2520,
+			"margin": 1,
+			"spacing": 2,
+			"tileheight": 16,
+			"tilewidth": 16
+		}
+	],
+	"tilewidth": 16,
+	"type": "map",
+	"width": 8
+}

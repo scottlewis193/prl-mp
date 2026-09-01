@@ -4,7 +4,8 @@ declare const trackSelection: {
 	selectCompatibleTrack<T extends { id: string; compatibleFormats?: string[] }>(
 		tracks: T[],
 		format: string,
-		selectionIndex: number
+		selectionIndex: number,
+		schedulingSeed?: string
 	): T;
 };
 

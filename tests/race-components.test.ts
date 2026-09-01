@@ -38,7 +38,19 @@ async function serverComponent(name: string) {
 	};
 }
 
-const track = { id: 'track-1', name: 'Indigo Circuit' };
+const track = {
+	id: 'track-1',
+	name: 'Indigo Circuit',
+	length: 1_200,
+	totalLength: 1_200,
+	width: 40,
+	surface: 'grass',
+	hazards: [{ type: 'tight-turn', severity: 0.25, checkpointIndex: 2 }],
+	corneringDemand: 0.35,
+	speedBias: 0.2,
+	risk: 0.15,
+	compatibleFormats: ['circuit']
+};
 const racers = [
 	{ id: 'racer-1', name: 'Bolt', race: 'race-live' },
 	{ id: 'racer-2', name: 'Dash', race: 'race-live' }
@@ -100,6 +112,7 @@ test('race cards show track, time or countdown, status and participant summary',
 		}).body;
 
 		assert.match(body, /Indigo Circuit/);
+		assert.equal((body.match(/Grass\s*·\s*1,200 px\s*·\s*15% risk/g) ?? []).length, 2);
 		assert.match(body, /Starts in 2m 5s/);
 		assert.match(body, /Starting soon/);
 		assert.match(body, /Live/);

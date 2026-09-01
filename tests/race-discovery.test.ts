@@ -4,7 +4,36 @@ import test from 'node:test';
 import { classifyRaces, formatRaceSchedule, presentRace } from '../src/lib/raceDiscovery';
 import type { Race, Racer, RaceTrackType } from '../src/lib/types';
 
-const track = { id: 'track-1', name: 'Indigo Circuit' } as RaceTrackType;
+const track = {
+	id: 'track-1',
+	name: 'Indigo Circuit',
+	length: 1_200,
+	totalLength: 1_200,
+	width: 40,
+	surface: 'grass',
+	hazards: [{ type: 'tight-turn', severity: 0.25, checkpointIndex: 2 }],
+	corneringDemand: 0.35,
+	speedBias: 0.2,
+	risk: 0.15,
+	compatibleFormats: ['circuit']
+} as RaceTrackType;
+
+const trackCharacteristics = {
+	length: 1_200,
+	width: 40,
+	surface: 'grass',
+	hazards: [{ type: 'tight-turn', severity: 0.25, checkpointIndex: 2 }],
+	corneringDemand: 0.35,
+	speedBias: 0.2,
+	risk: 0.15,
+	compatibleFormats: ['circuit'],
+	surfaceLabel: 'Grass',
+	hazardLabels: ['Tight Turn'],
+	formatLabels: ['Circuit'],
+	corneringDemandPercent: 35,
+	speedBiasPercent: 20,
+	riskPercent: 15
+};
 const racers = [
 	{ id: 'racer-1', name: 'Bolt', race: 'race-live' },
 	{ id: 'racer-2', name: 'Dash', race: 'race-live' },
@@ -63,6 +92,7 @@ test('race presentation resolves track, participants, winner and finishing resul
 	assert.deepEqual(presentRace(completed, racers, [track]), {
 		race: completed,
 		trackName: 'Indigo Circuit',
+		trackCharacteristics,
 		participants: [racers[2], racers[0]],
 		participantCount: 2,
 		winnerName: 'Comet',
@@ -91,6 +121,7 @@ test('race presentation treats a null PocketBase finishing order as no results',
 	assert.deepEqual(presentRace(pending, racers, [track]), {
 		race: pending,
 		trackName: 'Indigo Circuit',
+		trackCharacteristics,
 		participants: [],
 		participantCount: 0,
 		winnerName: undefined,

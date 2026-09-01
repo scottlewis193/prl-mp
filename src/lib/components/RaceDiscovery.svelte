@@ -82,6 +82,13 @@
 										<div>
 											<h3 class="card-title">{race.name}</h3>
 											<p class="text-sm opacity-70">{racePresentation.trackName}</p>
+											{#if racePresentation.trackCharacteristics}
+												<p class="text-xs opacity-60">
+													{racePresentation.trackCharacteristics.surfaceLabel} ·
+													{racePresentation.trackCharacteristics.length.toLocaleString('en-GB')} px ·
+													{racePresentation.trackCharacteristics.riskPercent}% risk
+												</p>
+											{/if}
 										</div>
 										<span class:badge-error={race.status === 'running'} class="badge badge-soft">
 											{raceStatusLabel(race.status)}

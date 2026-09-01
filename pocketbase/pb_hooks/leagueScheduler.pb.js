@@ -120,6 +120,10 @@ routerAdd(
 		const countdownMs = Number(body.countdownMs ?? 5 * 60 * 1000);
 		const totalLaps = Number(body.totalLaps ?? 5);
 		const raceFormat = require(`${__hooks}/trackSelection.cjs`).normalizeRaceFormat(body.format);
+		const schedulingSeed =
+			typeof body.schedulingSeed === 'string' && body.schedulingSeed.trim()
+				? body.schedulingSeed.trim()
+				: 'league-calendar-v1';
 		if (!Number.isInteger(futureEventCount) || futureEventCount < 1 || futureEventCount > 30) {
 			throw e.badRequestError('futureEventCount is outside the supported range.', {});
 		}
@@ -142,6 +146,9 @@ routerAdd(
 		}
 		if (!Number.isInteger(totalLaps) || totalLaps < 1 || totalLaps > 999) {
 			throw e.badRequestError('totalLaps is outside the supported range.', {});
+		}
+		if (schedulingSeed.length > 100) {
+			throw e.badRequestError('schedulingSeed is outside the supported range.', {});
 		}
 
 		const result = {
@@ -354,7 +361,8 @@ routerAdd(
 						const selectedTrack = require(`${__hooks}/trackSelection.cjs`).selectCompatibleTrack(
 							racetracks,
 							raceFormat,
-							trackSelectionIndex++
+							trackSelectionIndex++,
+							schedulingSeed
 						);
 						race.set(
 							'name',

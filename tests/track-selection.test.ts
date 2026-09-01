@@ -27,3 +27,34 @@ test('scheduler treats migrated legacy tracks as circuit-compatible', () => {
 		/no racetrack supports/i
 	);
 });
+
+test('a fixed scheduling seed produces a reproducible compatible rotation without repeats', () => {
+	const tracks = [
+		{ id: 'track-c', compatibleFormats: ['circuit'] },
+		{ id: 'track-a', compatibleFormats: ['circuit'] },
+		{ id: 'track-sprint', compatibleFormats: ['sprint'] },
+		{ id: 'track-b', compatibleFormats: ['circuit'] }
+	];
+	const rotate = (seed: string) =>
+		Array.from(
+			{ length: 7 },
+			(_, index) => trackSelection.selectCompatibleTrack(tracks, 'circuit', index, seed).id
+		);
+
+	assert.deepEqual(rotate('A'), [
+		'track-c',
+		'track-a',
+		'track-b',
+		'track-c',
+		'track-a',
+		'track-b',
+		'track-c'
+	]);
+	assert.deepEqual(rotate('A'), rotate('A'));
+	assert.notDeepEqual(rotate('A'), rotate('B'));
+	assert.equal(rotate('A').includes('track-sprint'), false);
+	assert.equal(
+		rotate('A').some((track, index, rotation) => track === rotation[index - 1]),
+		false
+	);
+});
