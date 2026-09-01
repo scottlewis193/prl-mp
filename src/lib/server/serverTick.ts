@@ -164,8 +164,34 @@ async function simulateRace(
 
 		const now = Date.now();
 		const finishedAt = new Date(now).toISOString();
+		const positions = new Map(
+			[...racers]
+				.sort((left, right) => {
+					const lapDifference = right.currentRace.lapsCompleted - left.currentRace.lapsCompleted;
+					if (lapDifference) return lapDifference;
+					const checkpointDifference =
+						right.currentRace.checkpointIndex - left.currentRace.checkpointIndex;
+					if (checkpointDifference) return checkpointDifference;
+					const distanceDifference =
+						right.currentRace.distanceFromCheckpoint - left.currentRace.distanceFromCheckpoint;
+					if (distanceDifference) return distanceDifference;
+					return (left.id ?? '').localeCompare(right.id ?? '');
+				})
+				.map((racer, index) => [racer.id, index + 1])
+		);
 		for (const racer of racers) {
-			const simulated = simulateRacer(racer, racetrack, now, race.totalLaps);
+			const simulated = simulateRacer(racer, racetrack, now, race.totalLaps, {
+				raceId: race.id,
+				simulationSeed:
+					race.movePolicy?.simulationSeed ??
+					`${race.id}:${race.movePolicy?.rulesVersion ?? 'moves-disabled-v1'}`,
+				movePolicy: race.movePolicy ?? {
+					enabled: false,
+					rulesVersion: 'moves-disabled-v1'
+				},
+				position: positions.get(racer.id) ?? racers.length,
+				fieldSize: racers.length
+			});
 			Object.assign(racer.currentRace, {
 				checkpointIndex: simulated.checkpointIndex,
 				distanceFromCheckpoint: simulated.distanceFromCheckpoint,
@@ -173,6 +199,10 @@ async function simulateRace(
 				lastUpdatedAt: simulated.lastUpdatedAt,
 				trackContext: simulated.trackContext
 			});
+			if ('moveState' in simulated) racer.currentRace.moveState = simulated.moveState;
+			if ('significantEvents' in simulated) {
+				racer.currentRace.significantEvents = simulated.significantEvents;
+			}
 			racer.positioning.x = simulated.x;
 			racer.positioning.y = simulated.y;
 			racer.positioning.trackOffset = racer.positioning.targetTrackOffset ?? 0;

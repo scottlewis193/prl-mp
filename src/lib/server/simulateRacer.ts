@@ -1,21 +1,86 @@
-import type { Racer, RaceTrack } from '$lib/types';
+import type {
+	RaceMovePolicy,
+	RaceMoveState,
+	Racer,
+	RaceSignificantEvent,
+	RaceTrack,
+	TrackSimulationContext
+} from '$lib/types';
 import { createTrackSimulationContext } from '../trackCharacteristics';
 import { recordLapTime, startLapTimer } from './lapTiming';
+import { performTemporaryRacingBuff } from './racingBuffs';
 
 const collisionThreshold = 64; // collision radius
 const MAX_ELAPSED_SECONDS = 1;
+
+type RacerSimulationOptions = {
+	raceId: string;
+	simulationSeed: string;
+	movePolicy: RaceMovePolicy;
+	position: number;
+	fieldSize: number;
+};
+
+export type SimulatedRacerProjection = {
+	checkpointIndex: number;
+	distanceFromCheckpoint: number;
+	lapsCompleted: number;
+	lastUpdatedAt: string;
+	finished: boolean;
+	finishedAt?: string;
+	x: number;
+	y: number;
+	trackContext: TrackSimulationContext;
+	moveState?: RaceMoveState;
+	significantEvents?: RaceSignificantEvent[];
+};
+
+function appendSignificantEvents(
+	existing: RaceSignificantEvent[] | undefined,
+	created: RaceSignificantEvent[]
+): RaceSignificantEvent[] {
+	const events = new Map((existing ?? []).map((event) => [event.id, event]));
+	for (const event of created) events.set(event.id, event);
+	return [...events.values()]
+		.sort((left, right) => left.occurredAt.localeCompare(right.occurredAt))
+		.slice(-100);
+}
 
 export function simulateRacer(
 	racer: Racer,
 	racetrack: RaceTrack,
 	now = Date.now(),
-	totalLaps = 10
-) {
+	totalLaps = 10,
+	options?: RacerSimulationOptions
+): SimulatedRacerProjection {
 	const lastUpdatedAt = Date.parse(racer.currentRace.lastUpdatedAt);
 	const elapsed = Number.isFinite(lastUpdatedAt)
 		? Math.min(MAX_ELAPSED_SECONDS, Math.max(0, (now - lastUpdatedAt) / 1000))
 		: 0;
 	const trackContext = createTrackSimulationContext(racer, racetrack);
+	const buff = options
+		? performTemporaryRacingBuff({
+				racer,
+				raceId: options.raceId,
+				simulationSeed: options.simulationSeed,
+				movePolicy: options.movePolicy,
+				position: options.position,
+				fieldSize: options.fieldSize,
+				trackSegment: {
+					checkpointIndex: racer.currentRace.checkpointIndex,
+					speedBias: racetrack.speedBias,
+					corneringDemand: racetrack.corneringDemand
+				},
+				now,
+				state: racer.currentRace.moveState
+			})
+		: undefined;
+	const moveProjection = buff
+		? {
+				moveState: buff.state,
+				significantEvents: appendSignificantEvents(racer.currentRace.significantEvents, buff.events)
+			}
+		: {};
 
 	// Determine current speed
 	const pokemon = racer.expand.pokemon;
@@ -29,7 +94,8 @@ export function simulateRacer(
 			finishedAt: new Date(now).toISOString(),
 			x: 0,
 			y: 0,
-			trackContext
+			trackContext,
+			...moveProjection
 		};
 	}
 	const baseSpeed = racer.currentRace.finished
@@ -38,7 +104,11 @@ export function simulateRacer(
 	const healthMultiplier = racer.health?.eligible
 		? Math.max(0, Math.min(1, racer.health.performanceMultiplier))
 		: 1;
-	const speed = baseSpeed * trackContext.speedMultiplier * healthMultiplier;
+	const speed =
+		baseSpeed *
+		trackContext.speedMultiplier *
+		healthMultiplier *
+		(buff?.capabilityMultipliers.speed ?? 1);
 
 	// Total distance to travel this tick
 	let distanceToTravel = racer.currentRace.distanceFromCheckpoint + speed * elapsed;
@@ -85,7 +155,8 @@ export function simulateRacer(
 					finishedAt,
 					x: checkpoints[0].x,
 					y: checkpoints[0].y,
-					trackContext
+					trackContext,
+					...moveProjection
 				};
 			}
 		}
@@ -120,6 +191,7 @@ export function simulateRacer(
 		finished: false,
 		x,
 		y,
-		trackContext
+		trackContext,
+		...moveProjection
 	};
 }

@@ -9,6 +9,7 @@
 	import { getUserContext } from '$lib/stores/user.svelte';
 	import { getLeadingRacer } from '$lib/raceProgress';
 	import { raceFormatLabel } from '$lib/raceDiscovery';
+	import { collectRaceSignificantEvents } from '$lib/raceMoveEvents';
 
 	const _race = getCurrentRaceContext();
 	const _racers = getCurrentRacersContext();
@@ -16,6 +17,7 @@
 
 	const camera: Camera = setCameraContext();
 	const user = getUserContext();
+	const significantEvents = $derived(collectRaceSignificantEvents(_racers));
 
 	$effect(() => {
 		if (user?.options?.raceViewer?.cameraMode !== 'follow') return;
@@ -32,6 +34,19 @@
 			{raceFormatLabel(_race.raceFormat)}
 		</div>
 		<LeaderBoard />
+		{#if significantEvents.length > 0}
+			<section
+				class="rounded-box bg-base-100/90 absolute top-12 right-2 z-[1000] max-h-40 w-80 overflow-y-auto p-3 shadow"
+				aria-label="Live race highlights"
+			>
+				<h2 class="mb-2 font-semibold">Live race highlights</h2>
+				<ul class="space-y-2 text-sm">
+					{#each significantEvents.slice(-4).reverse() as event (event.id)}
+						<li>{event.summary}</li>
+					{/each}
+				</ul>
+			</section>
+		{/if}
 
 		<PixiTrackRenderer />
 

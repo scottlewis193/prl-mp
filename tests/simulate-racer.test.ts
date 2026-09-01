@@ -160,3 +160,39 @@ test('records the crossing instant within a simulation tick', () => {
 	assert.equal(result.finished, true);
 	assert.equal(result.finishedAt, new Date(500).toISOString());
 });
+
+test('applies and expires a deterministic temporary buff through the race simulation seam', () => {
+	const tacticalRacer = structuredClone(racer) as Racer;
+	tacticalRacer.name = 'Bolt';
+	tacticalRacer.id = 'racer-1';
+	tacticalRacer.traits = { temperament: 100 } as Racer['traits'];
+	tacticalRacer.expand.trainer = { tactics: 10 } as Racer['expand']['trainer'];
+
+	const activated = simulateRacer(tacticalRacer, racetrack, 1_000, race.totalLaps, {
+		raceId: 'race-1',
+		simulationSeed: 'simulation-1',
+		movePolicy: { enabled: true, rulesVersion: 'racing-moves-v1' },
+		position: 8,
+		fieldSize: 8
+	});
+	assert.ok(Math.abs(activated.distanceFromCheckpoint - 11.2) < Number.EPSILON * 10);
+	assert.ok(activated.moveState);
+	assert.ok(activated.significantEvents);
+	assert.equal(activated.moveState.resource, 70);
+	assert.equal(activated.significantEvents[0]?.type, 'move_activated');
+
+	Object.assign(tacticalRacer.currentRace, activated);
+	const expired = simulateRacer(tacticalRacer, racetrack, 3_000, race.totalLaps, {
+		raceId: 'race-1',
+		simulationSeed: 'simulation-1',
+		movePolicy: { enabled: true, rulesVersion: 'racing-moves-v1' },
+		position: 8,
+		fieldSize: 8
+	});
+	assert.ok(Math.abs(expired.distanceFromCheckpoint - 21.2) < Number.EPSILON * 20);
+	assert.ok(expired.significantEvents);
+	assert.deepEqual(
+		expired.significantEvents.map((event) => event.type),
+		['move_activated', 'move_expired']
+	);
+});

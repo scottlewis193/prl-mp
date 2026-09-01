@@ -102,7 +102,35 @@ export type RaceEligibilityPolicy = {
 	trainerRequired: boolean;
 };
 
-export type RaceMovePolicy = { enabled: boolean; rulesVersion: string };
+export type RaceMovePolicy = {
+	enabled: boolean;
+	rulesVersion: string;
+	simulationSeed?: string;
+};
+export type RaceMoveEffect = {
+	moveId: string;
+	moveName: string;
+	affectedCapability: 'speed';
+	potency: number;
+	activatedAt: number;
+	expiresAt: number;
+};
+export type RaceMoveState = {
+	resource: number;
+	cooldowns: Record<string, number>;
+	activeEffects: RaceMoveEffect[];
+	lastDecisionKey?: string;
+};
+export type RaceSignificantEvent = {
+	id: string;
+	type: 'move_activated' | 'move_expired';
+	occurredAt: string;
+	racerId: string;
+	racerName: string;
+	moveId: string;
+	moveName: string;
+	summary: string;
+};
 export type RaceRiskPolicy = {
 	level: 'low' | 'standard' | 'high';
 	incidentMultiplier: number;
@@ -170,7 +198,7 @@ export class Race implements RaceType {
 	prizeCurve?: number[] = [];
 	pointsCurve?: number[] = [];
 	prizeScale?: number = 0;
-	movePolicy?: RaceMovePolicy = { enabled: false, rulesVersion: 'moves-disabled-v1' };
+	movePolicy?: RaceMovePolicy = { enabled: true, rulesVersion: 'racing-moves-v1' };
 	riskPolicy?: RaceRiskPolicy = { level: 'standard', incidentMultiplier: 1, trackRisk: 0 };
 	wageringPolicy?: RaceWageringPolicy = { enabled: false, markets: [] };
 	awardedPrizes?: AwardedPrize[] = [];
@@ -225,6 +253,8 @@ type RacerType = RacerLifecycle & {
 		bestLapTime?: number;
 		trackContext?: TrackSimulationContext;
 		trainerAtEntry?: TrainerAtRaceEntry;
+		moveState?: RaceMoveState;
+		significantEvents?: RaceSignificantEvent[];
 	};
 	// --- 🏁 Career Performance ---
 	raceHistory: {
@@ -360,6 +390,8 @@ export class Racer implements RacerType {
 		bestLapTime?: number;
 		trackContext?: TrackSimulationContext;
 		trainerAtEntry?: TrainerAtRaceEntry;
+		moveState?: RaceMoveState;
+		significantEvents?: RaceSignificantEvent[];
 	} = $state({
 		lapsCompleted: 0,
 		checkpointIndex: 0,

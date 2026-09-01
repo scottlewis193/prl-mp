@@ -167,7 +167,11 @@ routerAdd(
 					(_, index) => Math.round((entrantsPerClass - index) * prizeScale * 100) / 100
 				)
 			);
-			race.set('movePolicy', { enabled: false, rulesVersion: 'moves-disabled-v1' });
+			race.set('movePolicy', {
+				enabled: true,
+				rulesVersion: 'racing-moves-v1',
+				simulationSeed: `grand-prix:${schedulingSeed}:${requestKey}`
+			});
 			race.set('riskPolicy', {
 				level: 'standard',
 				incidentMultiplier: 1,

@@ -68,7 +68,7 @@ routerAdd(
 				Array.from({ length: places }, (_, index) => (places - index) * safeScale)
 			);
 		};
-		const snapshotLeagueRace = (race, season, league, track) => {
+		const snapshotLeagueRace = (race, season, league, track, simulationSeed) => {
 			const configuredCurve = JSON.parse(toString(season.get('pointsCurve')) || '[]');
 			if (
 				!Array.isArray(configuredCurve) ||
@@ -90,7 +90,11 @@ routerAdd(
 				retired: false,
 				trainerRequired: true
 			});
-			race.set('movePolicy', { enabled: false, rulesVersion: 'moves-disabled-v1' });
+			race.set('movePolicy', {
+				enabled: true,
+				rulesVersion: 'racing-moves-v1',
+				simulationSeed
+			});
 			race.set('riskPolicy', {
 				level: 'standard',
 				incidentMultiplier: 1,
@@ -408,7 +412,13 @@ routerAdd(
 						race.set('racetrack', selectedTrack.id);
 						race.set('startTime', new Date(slotMs).toISOString());
 						race.set('totalLaps', totalLaps);
-						snapshotLeagueRace(race, activeSeason, league, selectedTrack.record);
+						snapshotLeagueRace(
+							race,
+							activeSeason,
+							league,
+							selectedTrack.record,
+							`league-race:${schedulingSeed}:${league.id}:${slotMs}`
+						);
 						snapshotPrizeCurve(race, capacity, league.getFloat('prizeMoneyScaling'));
 						exposeWinnerMarket(race, selected, new Date(slotMs).toISOString());
 						txApp.save(race);

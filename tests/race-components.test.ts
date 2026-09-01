@@ -31,6 +31,10 @@ async function serverComponent(name: string) {
 				"'$lib/raceDiscovery'",
 				JSON.stringify(new URL('../src/lib/raceDiscovery.ts', import.meta.url).href)
 			)
+			.replace(
+				"'$lib/raceMoveEvents'",
+				JSON.stringify(new URL('../src/lib/raceMoveEvents.ts', import.meta.url).href)
+			)
 	);
 	return {
 		component: (await import(pathToFileURL(modulePath).href)).default,
@@ -149,6 +153,54 @@ test('completed race detail names the winner and displays finishing results', as
 		assert.match(body, /20 PokéD/);
 		assert.doesNotMatch(body, /Prize structure/i);
 		assert.ok(body.indexOf('Dash') < body.indexOf('Bolt'));
+	} finally {
+		await cleanup();
+	}
+});
+
+test('completed race detail displays significant buff activation and expiry events', async () => {
+	const { component, cleanup } = await serverComponent('RaceDetail');
+	try {
+		const eventRacers = [
+			{
+				...racers[0],
+				currentRace: {
+					significantEvents: [
+						{
+							id: 'activation-1',
+							type: 'move_activated',
+							occurredAt: '2026-08-15T12:00:01Z',
+							racerId: 'racer-1',
+							racerName: 'Bolt',
+							moveId: 'second-wind',
+							moveName: 'Second Wind',
+							summary: 'Bolt activated Second Wind for a temporary speed boost.'
+						},
+						{
+							id: 'expiry-1',
+							type: 'move_expired',
+							occurredAt: '2026-08-15T12:00:03Z',
+							racerId: 'racer-1',
+							racerName: 'Bolt',
+							moveId: 'second-wind',
+							moveName: 'Second Wind',
+							summary: 'Second Wind expired for Bolt.'
+						}
+					]
+				}
+			}
+		];
+		const body = render(component, {
+			props: {
+				race: { ...baseRace, status: 'settled', startTime: '2026-08-15T12:00:00Z' },
+				racers: eventRacers,
+				racetrack: track
+			}
+		}).body;
+
+		assert.match(body, /Race highlights/i);
+		assert.match(body, /Bolt activated Second Wind/);
+		assert.match(body, /Second Wind expired for Bolt/);
 	} finally {
 		await cleanup();
 	}

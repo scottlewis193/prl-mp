@@ -85,6 +85,11 @@ test(
 			assert.deepEqual(race.eligibilityPolicy.leagueIds, leagueIds);
 			assert.deepEqual(race.pointsCurve, [10, 4]);
 			assert.deepEqual(race.prizeCurve, [4, 2]);
+			assert.deepEqual(race.movePolicy, {
+				enabled: true,
+				rulesVersion: 'racing-moves-v1',
+				simulationSeed: 'grand-prix:grand-prix-integration:integration-grand-prix'
+			});
 			assert.deepEqual(race.wageringPolicy, { enabled: true, markets: ['winner'] });
 			assert.equal(race.markets.winnerSelections.length, 4);
 			assert.deepEqual(

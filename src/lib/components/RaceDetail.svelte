@@ -6,6 +6,7 @@
 		raceStatusLabel
 	} from '$lib/raceDiscovery';
 	import type { Race, Racer, RaceTrackType } from '$lib/types';
+	import { collectRaceSignificantEvents } from '$lib/raceMoveEvents';
 
 	let {
 		race,
@@ -16,6 +17,7 @@
 
 	const racePresentation = $derived(presentRace(race, racers, [racetrack]));
 	const trackPresentation = $derived(presentTrackCharacteristics(racetrack));
+	const significantEvents = $derived(collectRaceSignificantEvents(racers));
 	const ordinal = (position: number) => {
 		const remainder = position % 100;
 		if (remainder >= 11 && remainder <= 13) return `${position}th`;
@@ -136,6 +138,17 @@
 				<h2 id="winner-heading" class="font-semibold">Winner</h2>
 				<p class="text-lg">{racePresentation.winnerName}</p>
 			</div>
+		</section>
+	{/if}
+
+	{#if significantEvents.length > 0}
+		<section aria-labelledby="race-highlights-heading">
+			<h2 id="race-highlights-heading" class="mb-3 text-xl font-semibold">Race highlights</h2>
+			<ol class="rounded-box border-base-300 bg-base-200 divide-base-300 divide-y border">
+				{#each significantEvents as event (event.id)}
+					<li class="p-4">{event.summary}</li>
+				{/each}
+			</ol>
 		</section>
 	{/if}
 

@@ -28,7 +28,7 @@ test('new races carry an explicit default format policy snapshot', () => {
 	});
 	assert.deepEqual(race.pointsCurve, []);
 	assert.deepEqual(race.prizeCurve, []);
-	assert.deepEqual(race.movePolicy, { enabled: false, rulesVersion: 'moves-disabled-v1' });
+	assert.deepEqual(race.movePolicy, { enabled: true, rulesVersion: 'racing-moves-v1' });
 	assert.deepEqual(race.riskPolicy, {
 		level: 'standard',
 		incidentMultiplier: 1,

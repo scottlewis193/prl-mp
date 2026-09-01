@@ -112,8 +112,9 @@ test(
 			});
 			assert.equal(rankedRace.prizeScale, 2);
 			assert.deepEqual(rankedRace.movePolicy, {
-				enabled: false,
-				rulesVersion: 'moves-disabled-v1'
+				enabled: true,
+				rulesVersion: 'racing-moves-v1',
+				simulationSeed: `league-race:league-calendar-v1:${leagueId}:1786712400000`
 			});
 			assert.deepEqual(rankedRace.wageringPolicy, { enabled: true, markets: ['winner'] });
 			assert.equal(rankedRace.riskPolicy.level, 'standard');
