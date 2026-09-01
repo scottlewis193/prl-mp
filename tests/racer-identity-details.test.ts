@@ -33,6 +33,15 @@ test('racer details distinguish canonical species stats from individual lifecycl
 		const body = render(component, {
 			props: {
 				racer: {
+					status: { retired: true, injured: false },
+					retirement: {
+						retiredAt: '2026-09-01T12:00:00.000Z',
+						reason: 'career_load',
+						rulesVersion: 'racer-retirement-v1',
+						eventId: 'retirement-event',
+						previousTrainer: { id: 'trainer-misty', name: 'Misty' },
+						previousLeague: { id: 'league-premier', name: 'Premier League' }
+					},
 					careerStartedAt: '2026-09-01T15:30:00.000Z',
 					careerLoad: 12,
 					traits: {
@@ -67,6 +76,9 @@ test('racer details distinguish canonical species stats from individual lifecycl
 		assert.match(body, /Individual traits/);
 		assert.match(body, /Durability[\s\S]*72/);
 		assert.match(body, /Career load[\s\S]*12 races/);
+		assert.match(body, /Retired[\s\S]*career load/i);
+		assert.match(body, /Final trainer[\s\S]*Misty/i);
+		assert.match(body, /Final league[\s\S]*Premier League/i);
 		assert.ok(body.indexOf('Species stats') < body.indexOf('Individual traits'));
 	} finally {
 		await rm(directory, { recursive: true, force: true });

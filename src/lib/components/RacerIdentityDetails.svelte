@@ -61,3 +61,27 @@
 		<dd>{racer.careerLoad ?? 0} races</dd>
 	</div>
 </dl>
+
+{#if racer.status?.retired && racer.retirement}
+	<section class="rounded-box bg-base-300 mt-3 p-4" aria-labelledby="retirement-heading">
+		<h2 id="retirement-heading" class="font-semibold">Retired</h2>
+		<dl class="mt-2 grid gap-1 text-sm sm:grid-cols-2">
+			<div class="flex justify-between gap-4">
+				<dt>Date</dt>
+				<dd>{new Date(racer.retirement.retiredAt).toLocaleDateString()}</dd>
+			</div>
+			<div class="flex justify-between gap-4">
+				<dt>Primary factor</dt>
+				<dd>{racer.retirement.reason.replaceAll('_', ' ')}</dd>
+			</div>
+			{#if racer.retirement.previousTrainer}<div class="flex justify-between gap-4">
+					<dt>Final trainer</dt>
+					<dd>{racer.retirement.previousTrainer.name}</dd>
+				</div>{/if}
+			{#if racer.retirement.previousLeague}<div class="flex justify-between gap-4">
+					<dt>Final league</dt>
+					<dd>{racer.retirement.previousLeague.name}</dd>
+				</div>{/if}
+		</dl>
+	</section>
+{/if}

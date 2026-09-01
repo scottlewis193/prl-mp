@@ -17,6 +17,7 @@ routerAdd(
 			return status;
 		};
 		const schedulerEligible = (record) => {
+			if (schedulerStatus(record).retired) return false;
 			try {
 				const health = JSON.parse(toString(record.get('health'))) || {};
 				if (typeof health.eligible === 'boolean') {

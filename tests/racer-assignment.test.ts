@@ -6,7 +6,8 @@ import type { Racer } from '../src/lib/types';
 
 test('selects only racers without a race assignment', () => {
 	const racers = [
-		{ id: 'available', race: '' },
+		{ id: 'available', race: '', status: { retired: false, injured: false } },
+		{ id: 'retired', race: '', status: { retired: true, injured: false } },
 		{ id: 'assigned', race: 'race-1' }
 	] as Racer[];
 

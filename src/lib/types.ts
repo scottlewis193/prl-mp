@@ -55,6 +55,16 @@ export type RacerLifecycle = {
 	careerStartedAt: string;
 	careerLoad: number;
 	health?: RacerHealthProjection;
+	retirement?: RacerRetirementProjection;
+};
+
+export type RacerRetirementProjection = {
+	retiredAt: string;
+	reason: 'age' | 'career_load' | 'health';
+	rulesVersion: string;
+	eventId: string;
+	previousTrainer?: { id: string; name: string };
+	previousLeague?: { id: string; name: string };
 };
 
 export type RacerHealthProjection = {
@@ -255,6 +265,7 @@ export class Racer implements RacerType {
 		performanceMultiplier: 1,
 		activeConditionIds: []
 	});
+	retirement?: RacerRetirementProjection = $state(undefined);
 	expand: {
 		race?: Race;
 		league?: League;

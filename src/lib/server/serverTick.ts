@@ -4,6 +4,7 @@ import type { Race, Racer, RaceTrack } from '$lib/types';
 import { buildRaceCompletion, shouldFinishRace } from './raceCompletion';
 import { reconcileLeagueSchedule } from './leagueScheduler';
 import { processRacerHealth } from './racerHealthProcessing';
+import { processRacerRetirements } from './racerRetirementProcessing';
 import { getRacers } from './racers';
 import { getFinishedRaces, getRunningRaces, settleRace } from './races';
 import { getAllRacetracks } from './racetracks';
@@ -57,6 +58,14 @@ async function serverTick(): Promise<void> {
 		}
 	} catch (error) {
 		console.error('Racer health processing failed.', { ownerId, error });
+	}
+	try {
+		const retirement = await processRacerRetirements();
+		if (retirement.retiredRacers > 0) {
+			console.info('Racer retirements processed.', { ownerId, ...retirement });
+		}
+	} catch (error) {
+		console.error('Racer retirement processing failed.', { ownerId, error });
 	}
 	lease = await claimSimulatorLease(ownerId, LEASE_TTL_MS);
 	if (!lease) return;
