@@ -110,8 +110,12 @@ export type RaceMovePolicy = {
 export type RaceMoveEffect = {
 	moveId: string;
 	moveName: string;
-	affectedCapability: 'speed';
+	category?: 'buff' | 'penalty';
+	affectedCapability: 'speed' | 'handling';
 	potency: number;
+	minimumMultiplier?: number;
+	counterTags?: string[];
+	sourceRacerId?: string;
 	activatedAt: number;
 	expiresAt: number;
 };
@@ -120,13 +124,22 @@ export type RaceMoveState = {
 	cooldowns: Record<string, number>;
 	activeEffects: RaceMoveEffect[];
 	lastDecisionKey?: string;
+	lastAttackDecisionKey?: string;
 };
 export type RaceSignificantEvent = {
 	id: string;
-	type: 'move_activated' | 'move_expired';
+	type:
+		| 'move_activated'
+		| 'move_expired'
+		| 'attack_attempted'
+		| 'attack_landed'
+		| 'attack_missed'
+		| 'defence_activated';
 	occurredAt: string;
 	racerId: string;
 	racerName: string;
+	targetRacerId?: string;
+	targetRacerName?: string;
 	moveId: string;
 	moveName: string;
 	summary: string;

@@ -86,7 +86,8 @@ function normalizeState(state: RaceMoveState | undefined): RaceMoveState {
 		resource: clamp(Number(state?.resource ?? 100), 0, 100),
 		cooldowns: { ...(state?.cooldowns ?? {}) },
 		activeEffects: [...(state?.activeEffects ?? [])],
-		lastDecisionKey: state?.lastDecisionKey
+		lastDecisionKey: state?.lastDecisionKey,
+		lastAttackDecisionKey: state?.lastAttackDecisionKey
 	};
 }
 
@@ -202,12 +203,22 @@ export function performTemporaryRacingBuff(input: RacingBuffInput): RacingBuffRe
 		}
 	}
 
-	const potency = state.activeEffects
-		.filter((effect) => effect.affectedCapability === 'speed')
-		.reduce((total, effect) => total + effect.potency, 0);
+	const speedEffects = state.activeEffects.filter(
+		(effect) => effect.affectedCapability === 'speed'
+	);
+	const potency = speedEffects.reduce(
+		(total, effect) => total + (effect.category === 'penalty' ? -effect.potency : effect.potency),
+		0
+	);
+	const minimumMultiplier = speedEffects.reduce(
+		(minimum, effect) => Math.min(minimum, effect.minimumMultiplier ?? 1),
+		1
+	);
 	return {
 		state,
-		capabilityMultipliers: { speed: clamp(1 + potency, 1, move.maximumMultiplier) },
+		capabilityMultipliers: {
+			speed: clamp(1 + potency, Math.min(1, minimumMultiplier), move.maximumMultiplier)
+		},
 		events,
 		decision: { selectedMoveId, inputs: decisionInputs }
 	};

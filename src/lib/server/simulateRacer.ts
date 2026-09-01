@@ -7,6 +7,7 @@ import type {
 	TrackSimulationContext
 } from '$lib/types';
 import { createTrackSimulationContext } from '../trackCharacteristics';
+import { mergeRaceSignificantEvents } from '../raceMoveEvents';
 import { recordLapTime, startLapTimer } from './lapTiming';
 import { performTemporaryRacingBuff } from './racingBuffs';
 
@@ -34,17 +35,6 @@ export type SimulatedRacerProjection = {
 	moveState?: RaceMoveState;
 	significantEvents?: RaceSignificantEvent[];
 };
-
-function appendSignificantEvents(
-	existing: RaceSignificantEvent[] | undefined,
-	created: RaceSignificantEvent[]
-): RaceSignificantEvent[] {
-	const events = new Map((existing ?? []).map((event) => [event.id, event]));
-	for (const event of created) events.set(event.id, event);
-	return [...events.values()]
-		.sort((left, right) => left.occurredAt.localeCompare(right.occurredAt))
-		.slice(-100);
-}
 
 export function simulateRacer(
 	racer: Racer,
@@ -78,7 +68,10 @@ export function simulateRacer(
 	const moveProjection = buff
 		? {
 				moveState: buff.state,
-				significantEvents: appendSignificantEvents(racer.currentRace.significantEvents, buff.events)
+				significantEvents: mergeRaceSignificantEvents(
+					racer.currentRace.significantEvents,
+					buff.events
+				)
 			}
 		: {};
 

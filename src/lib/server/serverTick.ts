@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { Race, Racer, RaceTrack } from '$lib/types';
+import { mergeRaceSignificantEvents } from '$lib/raceMoveEvents';
 import { buildRaceCompletion, shouldFinishRace } from './raceCompletion';
 import { reconcileLeagueSchedule } from './leagueScheduler';
 import { processRacerHealth } from './racerHealthProcessing';
@@ -9,6 +10,7 @@ import { processTrainerRosters } from './rosterProcessing';
 import { getRacers } from './racers';
 import { getFinishedRaces, getRunningRaces, settleRace } from './races';
 import { getAllRacetracks } from './racetracks';
+import { resolveRacingAttacksForField } from './racingAttacks';
 import { resolveOvertaking } from './serverFunctions';
 import { simulateRacer } from './simulateRacer';
 import { authenticateServer } from './pocketbase';
@@ -179,16 +181,45 @@ async function simulateRace(
 				})
 				.map((racer, index) => [racer.id, index + 1])
 		);
+		const movePolicy = race.movePolicy ?? {
+			enabled: false,
+			rulesVersion: 'moves-disabled-v1'
+		};
+		const simulationSeed =
+			race.movePolicy?.simulationSeed ?? `${race.id}:${movePolicy.rulesVersion}`;
+		const attacks = resolveRacingAttacksForField({
+			racers,
+			positions: new Map(
+				[...positions.entries()].filter((entry): entry is [string, number] => Boolean(entry[0]))
+			),
+			raceId: race.id,
+			simulationSeed,
+			movePolicy,
+			trackSegment: {
+				checkpointIndex: 0,
+				speedBias: racetrack.speedBias,
+				corneringDemand: racetrack.corneringDemand
+			},
+			now
+		});
+		for (const racer of racers) {
+			if (!racer.id) continue;
+			racer.currentRace.moveState = attacks.states[racer.id];
+			const relevantEvents = attacks.events.filter(
+				(event) => event.racerId === racer.id || event.targetRacerId === racer.id
+			);
+			if (relevantEvents.length > 0) {
+				racer.currentRace.significantEvents = mergeRaceSignificantEvents(
+					racer.currentRace.significantEvents,
+					relevantEvents
+				);
+			}
+		}
 		for (const racer of racers) {
 			const simulated = simulateRacer(racer, racetrack, now, race.totalLaps, {
 				raceId: race.id,
-				simulationSeed:
-					race.movePolicy?.simulationSeed ??
-					`${race.id}:${race.movePolicy?.rulesVersion ?? 'moves-disabled-v1'}`,
-				movePolicy: race.movePolicy ?? {
-					enabled: false,
-					rulesVersion: 'moves-disabled-v1'
-				},
+				simulationSeed,
+				movePolicy,
 				position: positions.get(racer.id) ?? racers.length,
 				fieldSize: racers.length
 			});

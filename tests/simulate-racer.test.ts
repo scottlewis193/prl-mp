@@ -196,3 +196,55 @@ test('applies and expires a deterministic temporary buff through the race simula
 		['move_activated', 'move_expired']
 	);
 });
+
+test('applies and expires an incoming racing attack without reducing HP or eliminating the racer', () => {
+	const targetedRacer = structuredClone(racer) as Racer;
+	targetedRacer.id = 'target-1';
+	targetedRacer.name = 'Bolt';
+	targetedRacer.stats.hp = 42;
+	targetedRacer.currentRace.moveState = {
+		resource: 19,
+		cooldowns: {},
+		activeEffects: [
+			{
+				moveId: 'crosswind-cut',
+				moveName: 'Crosswind Cut',
+				category: 'penalty',
+				affectedCapability: 'speed',
+				potency: 0.18,
+				minimumMultiplier: 0.75,
+				counterTags: ['stability', 'wind'],
+				sourceRacerId: 'attacker-1',
+				activatedAt: 500,
+				expiresAt: 2_500
+			}
+		]
+	};
+
+	const impaired = simulateRacer(targetedRacer, racetrack, 1_000, race.totalLaps, {
+		raceId: 'race-1',
+		simulationSeed: 'fixed-attack-seed',
+		movePolicy: { enabled: true, rulesVersion: 'racing-moves-v1' },
+		position: 1,
+		fieldSize: 2
+	});
+	assert.ok(Math.abs(impaired.distanceFromCheckpoint - 8.2) < Number.EPSILON * 10);
+	assert.equal(targetedRacer.stats.hp, 42);
+	assert.equal(impaired.finished, false);
+
+	Object.assign(targetedRacer.currentRace, impaired);
+	const recovered = simulateRacer(targetedRacer, racetrack, 2_500, race.totalLaps, {
+		raceId: 'race-1',
+		simulationSeed: 'fixed-attack-seed',
+		movePolicy: { enabled: true, rulesVersion: 'racing-moves-v1' },
+		position: 1,
+		fieldSize: 2
+	});
+	assert.ok(Math.abs(recovered.distanceFromCheckpoint - 18.2) < Number.EPSILON * 20);
+	assert.equal(recovered.moveState?.activeEffects.length, 0);
+	assert.equal(recovered.significantEvents?.at(-1)?.type, 'move_expired');
+	assert.match(
+		recovered.significantEvents?.at(-1)?.summary ?? '',
+		/Crosswind Cut expired for Bolt/
+	);
+});
