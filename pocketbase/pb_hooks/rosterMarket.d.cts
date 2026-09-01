@@ -72,10 +72,14 @@ declare const rosterMarket: {
 		minimumPoolSize: number;
 		targetPoolSize: number;
 		seed: string;
-		existingSpeciesIds: string[];
-		retiredSpeciesIds: string[];
+		existingRacerIdentities: Array<{ speciesId: string; generationSeed: string }>;
 		eligibleSpeciesIds: string[];
-	}): Array<{ speciesId: string; generationSeed: string }>;
+	}): Array<{
+		speciesId: string;
+		generationSeed: string;
+		instanceIndex: number;
+		identityHash: string;
+	}>;
 };
 
 export = rosterMarket;

@@ -195,23 +195,47 @@ function planFreeAgentReplenishment(input) {
 	const minimum = Math.max(0, Math.floor(Number(input.minimumPoolSize) || 0));
 	const target = Math.max(minimum, Math.floor(Number(input.targetPoolSize) || minimum));
 	if (current >= minimum) return [];
-	const unavailable = new Set([
-		...(Array.isArray(input.existingSpeciesIds) ? input.existingSpeciesIds : []),
-		...(Array.isArray(input.retiredSpeciesIds) ? input.retiredSpeciesIds : [])
-	]);
-	return [...new Set(Array.isArray(input.eligibleSpeciesIds) ? input.eligibleSpeciesIds : [])]
-		.filter((speciesId) => speciesId && !unavailable.has(speciesId))
-		.map((speciesId) => ({
-			speciesId,
-			order: seededUnit(`${ROSTER_MARKET_RULES.version}:${input.seed}:replenish:${speciesId}`)
-		}))
+	const needed = Math.max(0, target - current);
+	const speciesIds = [
+		...new Set(Array.isArray(input.eligibleSpeciesIds) ? input.eligibleSpeciesIds : [])
+	]
+		.filter(Boolean)
+		.sort();
+	if (speciesIds.length === 0) return [];
+	const existingIdentityKeys = new Set(
+		(Array.isArray(input.existingRacerIdentities) ? input.existingRacerIdentities : [])
+			.filter((identity) => identity?.speciesId && identity?.generationSeed)
+			.map((identity) => `${identity.speciesId}:${identity.generationSeed}`)
+	);
+	const candidates = [];
+	const seedFingerprint = `${hashSeed(input.seed).toString(36)}${hashSeed(`seed:${input.seed}`).toString(36)}`;
+	for (let instanceIndex = 1; candidates.length < needed; instanceIndex += 1) {
+		for (const speciesId of speciesIds) {
+			const generationSeed = `free-agent:${seedFingerprint}:${speciesId}:${instanceIndex}`;
+			const identityKey = `${speciesId}:${generationSeed}`;
+			if (existingIdentityKeys.has(identityKey)) continue;
+			candidates.push({
+				speciesId,
+				generationSeed,
+				instanceIndex,
+				identityHash: `${hashSeed(identityKey).toString(36)}${hashSeed(`identity:${identityKey}`).toString(36)}`,
+				order: seededUnit(`${ROSTER_MARKET_RULES.version}:${input.seed}:replenish:${identityKey}`)
+			});
+		}
+	}
+	return candidates
 		.sort(
-			(left, right) => left.order - right.order || left.speciesId.localeCompare(right.speciesId)
+			(left, right) =>
+				left.order - right.order ||
+				left.speciesId.localeCompare(right.speciesId) ||
+				left.instanceIndex - right.instanceIndex
 		)
-		.slice(0, Math.max(0, target - current))
-		.map(({ speciesId }, index) => ({
+		.slice(0, needed)
+		.map(({ speciesId, generationSeed, instanceIndex, identityHash }) => ({
 			speciesId,
-			generationSeed: `${input.seed}:free-agent:${current + index + 1}`
+			generationSeed,
+			instanceIndex,
+			identityHash
 		}));
 }
 

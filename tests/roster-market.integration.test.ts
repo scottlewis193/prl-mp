@@ -129,6 +129,14 @@ test(
 				(await client.collection('news').getFullList({ filter: 'category = "release"' })).length,
 				1
 			);
+			await client.collection('racers').update(released.id, {
+				status: { ...released.status, retired: true }
+			});
+			const retiredIdentity = {
+				id: released.id,
+				speciesId: released.pokemon,
+				generationSeed: released.generationSeed
+			};
 			const existingFreeAgents = await client.collection('racers').getFullList({
 				filter: 'trainer = "" && league = ""'
 			});
@@ -151,22 +159,31 @@ test(
 			assert.deepEqual(await sendRosterRequest('replenish', replenishRequest), {
 				signedRacers: 0,
 				releasedRacers: 0,
-				createdFreeAgents: 2
+				createdFreeAgents: 3
 			});
 			assert.deepEqual(await sendRosterRequest('repeat replenish', replenishRequest), {
 				signedRacers: 0,
 				releasedRacers: 0,
 				createdFreeAgents: 0
 			});
-			const freeAgents = await client.collection('racers').getFullList({
+			const unassignedRacers = await client.collection('racers').getFullList({
 				filter: 'trainer = "" && league = ""'
 			});
+			const freeAgents = unassignedRacers.filter((racer) => !racer.status.retired);
 			assert.equal(freeAgents.length, 4);
-			assert.equal(new Set(freeAgents.map((racer) => racer.pokemon)).size, 4);
+			assert.equal(new Set(freeAgents.map((racer) => racer.id)).size, 4);
+			assert.equal(
+				new Set(freeAgents.map((racer) => `${racer.pokemon}:${racer.generationSeed}`)).size,
+				4
+			);
+			const stillRetired = await client.collection('racers').getOne(retiredIdentity.id);
+			assert.equal(stillRetired.status.retired, true);
+			assert.equal(stillRetired.pokemon, retiredIdentity.speciesId);
+			assert.equal(stillRetired.generationSeed, retiredIdentity.generationSeed);
 			assert.equal(
 				(await client.collection('events').getFullList({ filter: 'type = "FreeAgentCreated"' }))
 					.length,
-				2
+				3
 			);
 		} finally {
 			if (server) await stopPocketBase(server);

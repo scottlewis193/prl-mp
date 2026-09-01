@@ -133,21 +133,38 @@ test('roster valuation records bounded signing and release causes', () => {
 	);
 });
 
-test('free-agent replenishment reaches the target with unique eligible species', () => {
+test('free-agent replenishment reuses species through unique deterministic racer identities', () => {
 	const planned = planFreeAgentReplenishment({
 		currentPoolSize: 1,
 		minimumPoolSize: 2,
 		targetPoolSize: 4,
 		seed: 'pool-day-1',
-		existingSpeciesIds: ['species-a', 'species-retired'],
-		retiredSpeciesIds: ['species-retired'],
-		eligibleSpeciesIds: ['species-d', 'species-b', 'species-a', 'species-c', 'species-retired']
+		existingRacerIdentities: [
+			{ speciesId: 'species-a', generationSeed: 'active-seed' },
+			{ speciesId: 'species-a', generationSeed: 'retired-seed' }
+		],
+		eligibleSpeciesIds: ['species-a']
 	});
 
 	assert.equal(planned.length, 3);
+	assert.ok(planned.every((entry) => entry.speciesId === 'species-a'));
+	assert.equal(new Set(planned.map((entry) => entry.generationSeed)).size, 3);
+	assert.ok(
+		planned.every((entry) => !['active-seed', 'retired-seed'].includes(entry.generationSeed))
+	);
 	assert.deepEqual(
-		new Set(planned.map((entry) => entry.speciesId)),
-		new Set(['species-b', 'species-c', 'species-d'])
+		planFreeAgentReplenishment({
+			currentPoolSize: 1,
+			minimumPoolSize: 2,
+			targetPoolSize: 4,
+			seed: 'pool-day-1',
+			existingRacerIdentities: [
+				{ speciesId: 'species-a', generationSeed: 'active-seed' },
+				{ speciesId: 'species-a', generationSeed: 'retired-seed' }
+			],
+			eligibleSpeciesIds: ['species-a']
+		}),
+		planned
 	);
 	assert.deepEqual(
 		planFreeAgentReplenishment({
@@ -155,8 +172,7 @@ test('free-agent replenishment reaches the target with unique eligible species',
 			minimumPoolSize: 2,
 			targetPoolSize: 4,
 			seed: 'pool-day-1',
-			existingSpeciesIds: [],
-			retiredSpeciesIds: [],
+			existingRacerIdentities: [],
 			eligibleSpeciesIds: ['species-a']
 		}),
 		[]

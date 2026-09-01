@@ -261,13 +261,10 @@ routerAdd(
 				}
 
 				const allRacers = txApp.findAllRecords('racers');
-				const existingSpeciesIds = allRacers
-					.map((racer) => racer.getString('pokemon'))
-					.filter(Boolean);
-				const retiredSpeciesIds = allRacers
-					.filter((racer) => jsonField(racer, 'status', {}).retired)
-					.map((racer) => racer.getString('pokemon'))
-					.filter(Boolean);
+				const existingRacerIdentities = allRacers.map((racer) => ({
+					speciesId: racer.getString('pokemon'),
+					generationSeed: racer.getString('generationSeed')
+				}));
 				const species = txApp
 					.findAllRecords('pokemon')
 					.sort((left, right) => left.id.localeCompare(right.id));
@@ -276,12 +273,11 @@ routerAdd(
 					minimumPoolSize,
 					targetPoolSize,
 					seed,
-					existingSpeciesIds,
-					retiredSpeciesIds,
+					existingRacerIdentities,
 					eligibleSpeciesIds: species.map((entry) => entry.id)
 				});
 				for (const plan of plans) {
-					const eventKey = `free-agent:${processingDay}:${plan.speciesId}`;
+					const eventKey = `free-agent:${processingDay}:${plan.speciesId}:${plan.identityHash}`;
 					if (hasEvent(txApp, eventKey)) continue;
 					const pokemon = txApp.findRecordById('pokemon', plan.speciesId);
 					const stats = jsonField(pokemon, 'stats', {});
@@ -314,7 +310,7 @@ routerAdd(
 						defense: Number(stats.defense) || pokemon.getFloat('defense'),
 						speed: Number(stats.speed) || pokemon.getFloat('speed'),
 						level: 1,
-						ranking: existingSpeciesIds.length + result.createdFreeAgents + 1,
+						ranking: allRacers.length + result.createdFreeAgents + 1,
 						gender: traits.temperament % 2 ? 'male' : 'female'
 					});
 					racer.set('currentRace', {

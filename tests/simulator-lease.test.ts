@@ -461,6 +461,15 @@ test('settles a finished race atomically and remains unchanged when settlement i
 	assert.match(newsItems[0].headline, new RegExp(racers.at(-1)?.name as string));
 	assert.match(newsItems[0].summary, new RegExp(settledRace.name));
 	assert.match(newsItems[0].summary, /market.*10\.00.*10\.80/i);
+	for (const movement of settlementEvents[0].facts.priceMovements) {
+		const racerName = racers.find((racer) => racer.id === movement.racerId)?.name;
+		assert.ok(racerName);
+		assert.ok(
+			newsItems[0].summary.includes(
+				`${racerName} ₽${movement.previousPrice.toFixed(2)} → ₽${movement.price.toFixed(2)}`
+			)
+		);
+	}
 	assert.match(newsItems[0].summary, /career record.*wins from.*starts/i);
 	const settledParticipants = settledRacers.filter((settledRacer) =>
 		racers.some((racer) => racer.id === settledRacer.id)

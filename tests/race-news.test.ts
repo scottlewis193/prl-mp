@@ -19,7 +19,14 @@ const facts = {
 		{
 			racer: { id: 'racer-1', name: 'Bolt' },
 			previousPrice: 10,
-			price: 10.8
+			price: 10.8,
+			sourceEvent: 'event-race-17'
+		},
+		{
+			racer: { id: 'racer-2', name: 'Dash' },
+			previousPrice: 10,
+			price: 9.5,
+			sourceEvent: 'event-race-17'
 		}
 	]
 };
@@ -32,12 +39,13 @@ test('race-result news is deterministic, factual, and links every available enti
 	assert.equal(first.category, 'race_result');
 	assert.equal(first.importance, 70);
 	assert.equal(first.publishedAt, facts.occurredAt);
-	assert.equal(first.templateVersion, 'race-result-v3');
+	assert.equal(first.templateVersion, 'race-result-v4');
 	assert.match(first.headline, /Bolt/);
 	assert.match(first.summary, /Indigo Cup/);
 	assert.match(first.summary, /Dash/);
 	assert.match(first.summary, /Indigo Circuit/);
 	assert.match(first.summary, /market.*Bolt.*₽10\.00.*₽10\.80/i);
+	assert.match(first.summary, /Dash.*₽10\.00.*₽9\.50/i);
 	assert.deepEqual(first.links, [
 		{ kind: 'race', id: 'race-1', label: 'Indigo Cup', href: '/races/race-1' },
 		{ kind: 'racer', id: 'racer-1', label: 'Bolt', href: '/exchange' },
@@ -52,9 +60,32 @@ test('race-result news is deterministic, factual, and links every available enti
 	}
 });
 
+test('race-result news rejects valuation movements that are not linked to its source event', () => {
+	assert.throws(
+		() =>
+			buildRaceResultStory({
+				...facts,
+				priceMovements: [
+					{
+						...facts.priceMovements[0],
+						sourceEvent: 'different-event'
+					}
+				]
+			}),
+		/source event/i
+	);
+});
+
 test('different source events select varied templates without inventing source facts', () => {
 	const stories = Array.from({ length: 12 }, (_, index) =>
-		buildRaceResultStory({ ...facts, eventId: `event-${index}` })
+		buildRaceResultStory({
+			...facts,
+			eventId: `event-${index}`,
+			priceMovements: facts.priceMovements.map((movement) => ({
+				...movement,
+				sourceEvent: `event-${index}`
+			}))
+		})
 	);
 
 	assert.ok(new Set(stories.map((story) => story.headline)).size > 1);
@@ -100,8 +131,17 @@ test('race-result news explains incidents and supports an all-DNF outcome', () =
 				reason: 'mechanical-failure',
 				summary: 'Bolt did not finish after a mechanical failure.'
 			}
+		],
+		priceMovements: [
+			{
+				racer: { id: 'racer-1', name: 'Bolt' },
+				previousPrice: 10,
+				price: 8,
+				sourceEvent: 'event-race-17'
+			}
 		]
 	});
 	assert.match(allDnf.headline, /no classified finisher/i);
 	assert.match(allDnf.summary, /winner market was void/i);
+	assert.match(allDnf.summary, /market.*Bolt.*₽10\.00.*₽8\.00/i);
 });

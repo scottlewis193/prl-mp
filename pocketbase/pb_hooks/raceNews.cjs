@@ -14,6 +14,41 @@ function buildRaceResultStory(facts) {
 	if (!facts.league?.id || !facts.league?.name)
 		throw new Error('Race news requires a named league');
 	if (!facts.track?.id || !facts.track?.name) throw new Error('Race news requires a named track');
+	const participantOrder = [
+		...facts.finishers.map(({ id }) => id),
+		...nonFinishers.map(({ id }) => id)
+	];
+	const participantIds = new Set(participantOrder);
+	const priceMovements = Array.isArray(facts.priceMovements) ? [...facts.priceMovements] : [];
+	for (const movement of priceMovements) {
+		if (
+			!movement.racer?.id ||
+			!movement.racer?.name ||
+			!participantIds.has(movement.racer.id) ||
+			!Number.isFinite(movement.previousPrice) ||
+			!Number.isFinite(movement.price) ||
+			movement.sourceEvent !== facts.eventId
+		) {
+			throw new Error(
+				'Race news valuation movements must be participant facts from its source event'
+			);
+		}
+	}
+	const participantIndex = new Map(participantOrder.map((racerId, index) => [racerId, index]));
+	priceMovements.sort(
+		(left, right) =>
+			(participantIndex.get(left.racer.id) ?? Number.MAX_SAFE_INTEGER) -
+				(participantIndex.get(right.racer.id) ?? Number.MAX_SAFE_INTEGER) ||
+			left.racer.id.localeCompare(right.racer.id)
+	);
+	const marketText = priceMovements.length
+		? ` Market repricing: ${priceMovements
+				.map(
+					(movement) =>
+						`${movement.racer.name} ₽${movement.previousPrice.toFixed(2)} → ₽${movement.price.toFixed(2)}`
+				)
+				.join('; ')}.`
+		: '';
 
 	if (facts.finishers.length === 0) {
 		const incidentText = nonFinishers
@@ -23,13 +58,13 @@ function buildRaceResultStory(facts) {
 		return {
 			headline: `${facts.race.name} ends with no classified finisher`,
 			summary:
-				`${facts.race.name} at ${facts.track.name} ended after every racer failed to finish. ${incidentText} The winner market was void.`
+				`${facts.race.name} at ${facts.track.name} ended after every racer failed to finish. ${incidentText} The winner market was void.${marketText}`
 					.replace(/\s+/g, ' ')
 					.trim(),
 			category: 'race_result',
 			importance: 85,
 			publishedAt: facts.occurredAt,
-			templateVersion: 'race-result-v3',
+			templateVersion: 'race-result-v4',
 			links: [
 				{
 					kind: 'race',
@@ -62,12 +97,6 @@ function buildRaceResultStory(facts) {
 				: facts.race.format === 'grand_prix'
 					? ' This multi-class Grand Prix scored each racer within their league class.'
 					: '';
-	const winnerMovement = (facts.priceMovements || []).find(
-		(movement) => movement.racer?.id === facts.winner.id
-	);
-	const marketText = winnerMovement
-		? ` The market repriced the field after the result, moving ${facts.winner.name} from ₽${winnerMovement.previousPrice.toFixed(2)} to ₽${winnerMovement.price.toFixed(2)}.`
-		: '';
 	const careerText = facts.winnerCareer
 		? ` ${facts.winner.name}'s career record now stands at ${facts.winnerCareer.wins} wins from ${facts.winnerCareer.starts} starts.`
 		: '';
@@ -130,7 +159,7 @@ function buildRaceResultStory(facts) {
 					? 85
 					: 70,
 		publishedAt: facts.occurredAt,
-		templateVersion: 'race-result-v3',
+		templateVersion: 'race-result-v4',
 		links
 	};
 }

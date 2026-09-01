@@ -15,6 +15,7 @@ type RaceResultFacts = {
 		racer: NewsEntity;
 		previousPrice: number;
 		price: number;
+		sourceEvent: string;
 	}>;
 	winnerCareer?: { wins: number; starts: number };
 	notableTactics?: Array<{ id: string; summary: string }>;
@@ -28,7 +29,7 @@ declare const raceNews: {
 		category: 'race_result';
 		importance: number;
 		publishedAt: string;
-		templateVersion: 'race-result-v3';
+		templateVersion: 'race-result-v4';
 		links: Array<{
 			kind: 'race' | 'racer' | 'trainer' | 'league' | 'track';
 			id: string;

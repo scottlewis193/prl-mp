@@ -80,18 +80,39 @@ test('race desk reports format, record, market, incident, and notable tactical f
 		league,
 		track: { id: 'track-indigo', name: 'Indigo Circuit' },
 		winnerCareer: { wins: 10, starts: 25 },
-		priceMovements: [{ racer, previousPrice: 10, price: 10.8 }],
+		priceMovements: [
+			{
+				racer,
+				previousPrice: 10,
+				price: 10.8,
+				sourceEvent: 'grand-prix-result-1'
+			},
+			{
+				racer: { id: 'racer-dash', name: 'Dash' },
+				previousPrice: 10,
+				price: 9.7,
+				sourceEvent: 'grand-prix-result-1'
+			},
+			{
+				racer: { id: 'racer-comet', name: 'Comet' },
+				previousPrice: 10,
+				price: 8,
+				sourceEvent: 'grand-prix-result-1'
+			}
+		],
 		notableTactics: [
 			{ id: 'move-1', summary: 'Bolt used Agility to take the lead on the final lap.' }
 		]
 	});
 
-	assert.equal(story.templateVersion, 'race-result-v3');
+	assert.equal(story.templateVersion, 'race-result-v4');
 	assert.equal(story.importance, 90);
 	assert.match(story.headline, /Grand Prix|Bolt|Indigo/i);
 	assert.match(story.summary, /multi-class Grand Prix/i);
 	assert.match(story.summary, /10 wins from 25 starts/i);
 	assert.match(story.summary, /market.*Bolt.*₽10\.00.*₽10\.80/i);
+	assert.match(story.summary, /Dash.*₽10\.00.*₽9\.70/i);
+	assert.match(story.summary, /Comet.*₽10\.00.*₽8\.00/i);
 	assert.match(story.summary, /Comet did not finish.*oil slick/i);
 	assert.match(story.summary, /Bolt used Agility.*final lap/i);
 });
