@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { Race, Racer, RaceTrack } from '$lib/types';
 import { buildRaceCompletion, shouldFinishRace } from './raceCompletion';
 import { reconcileLeagueSchedule } from './leagueScheduler';
+import { processRacerHealth } from './racerHealthProcessing';
 import { getRacers } from './racers';
 import { getFinishedRaces, getRunningRaces, settleRace } from './races';
 import { getAllRacetracks } from './racetracks';
@@ -49,6 +50,17 @@ async function serverTick(): Promise<void> {
 	await authenticateServer();
 	let lease = await claimSimulatorLease(ownerId, LEASE_TTL_MS);
 	if (!lease) return;
+	try {
+		const health = await processRacerHealth();
+		if (health.createdConditions > 0 || health.recoveredConditions > 0) {
+			console.info('Racer health processed.', { ownerId, ...health });
+		}
+	} catch (error) {
+		console.error('Racer health processing failed.', { ownerId, error });
+	}
+	lease = await claimSimulatorLease(ownerId, LEASE_TTL_MS);
+	if (!lease) return;
+
 	try {
 		const schedule = await reconcileLeagueSchedule();
 		if (schedule.createdEvents > 0 || schedule.transitionedRaces > 0) {

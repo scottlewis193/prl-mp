@@ -20,13 +20,21 @@ export type RaceValuationReason = {
 	appliedPercent: number;
 };
 
+export type HealthValuationReason = {
+	type: 'health';
+	conditionId: string;
+	transition: 'onset' | 'recovery';
+	severity: 'minor' | 'moderate' | 'severe';
+	appliedPercent: number;
+};
+
 export type RacerPricePoint = {
 	timestamp: string;
 	previousPrice?: number;
 	price: number;
 	change?: number;
 	changePercent?: number;
-	reason?: string | RaceValuationReason;
+	reason?: string | RaceValuationReason | HealthValuationReason;
 	rulesVersion?: string;
 	sourceEvent?: string;
 };
@@ -46,6 +54,13 @@ export type RacerLifecycle = {
 	traitRulesVersion: string;
 	careerStartedAt: string;
 	careerLoad: number;
+	health?: RacerHealthProjection;
+};
+
+export type RacerHealthProjection = {
+	eligible: boolean;
+	performanceMultiplier: number;
+	activeConditionIds: string[];
 };
 
 export type RaceCompetitionFormat = {
@@ -235,6 +250,11 @@ export class Racer implements RacerType {
 	traitRulesVersion: string = $state('racer-traits-v1');
 	careerStartedAt: string = $state('');
 	careerLoad: number = $state(0);
+	health: RacerHealthProjection = $state({
+		eligible: true,
+		performanceMultiplier: 1,
+		activeConditionIds: []
+	});
 	expand: {
 		race?: Race;
 		league?: League;
@@ -623,17 +643,20 @@ export type Wager = {
 
 export type EventType = {
 	id: string;
-	type: 'DailyLeagueRaces' | 'RaceSettled';
+	type: 'DailyLeagueRaces' | 'RaceSettled' | 'HealthOnset' | 'HealthRecovery';
 	scheduleKey?: string;
 	startTime?: Date;
 	idempotencyKey?: string;
 	occurredAt?: Date;
 	facts?: {
-		raceId: string;
-		winnerId: string;
-		finishingOrder: string[];
-		awardedPrizes: AwardedPrize[];
+		raceId?: string;
+		winnerId?: string;
+		finishingOrder?: string[];
+		awardedPrizes?: AwardedPrize[];
 		seasonPoints?: { racerId: string; position: number; points: number }[];
+		racerId?: string;
+		conditionId?: string;
+		transition?: 'onset' | 'recovery';
 	};
 	raceIds: string[];
 	started: boolean;

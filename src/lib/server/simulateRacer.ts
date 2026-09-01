@@ -35,7 +35,10 @@ export function simulateRacer(
 	const baseSpeed = racer.currentRace.finished
 		? pokemon.speed / 7
 		: pokemon.speed + racer.stats.speed;
-	const speed = baseSpeed * trackContext.speedMultiplier;
+	const healthMultiplier = racer.health?.eligible
+		? Math.max(0, Math.min(1, racer.health.performanceMultiplier))
+		: 1;
+	const speed = baseSpeed * trackContext.speedMultiplier * healthMultiplier;
 
 	// Total distance to travel this tick
 	let distanceToTravel = racer.currentRace.distanceFromCheckpoint + speed * elapsed;

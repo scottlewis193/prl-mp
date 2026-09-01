@@ -111,6 +111,20 @@ test('applies the selected track speed bias through the generic suitability inpu
 	assert.equal(result.trackContext.speedMultiplier, 0.875);
 });
 
+test('applies an eligible minor health condition as its configured performance effect', () => {
+	const recoveringRacer = structuredClone(racer) as Racer;
+	recoveringRacer.health = {
+		eligible: true,
+		performanceMultiplier: 0.94,
+		activeConditionIds: ['condition-minor']
+	};
+
+	const result = simulateRacer(recoveringRacer, racetrack, 1_000, race.totalLaps);
+
+	assert.ok(Math.abs(result.distanceFromCheckpoint - 9.4) < Number.EPSILON * 10);
+	assert.ok(Math.abs(result.x - 9.4) < Number.EPSILON * 10);
+});
+
 test('initialises a racer with no race timestamp before calculating movement', () => {
 	const racerWithoutTimestamp = structuredClone(racer);
 	racerWithoutTimestamp.currentRace.lastUpdatedAt = '';

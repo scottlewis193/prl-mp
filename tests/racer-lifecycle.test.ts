@@ -65,6 +65,7 @@ test('new racer lifecycle data records its reproducibility and career inputs', (
 		generationSeed: input.generationSeed,
 		traitRulesVersion: RACER_TRAIT_RULES_VERSION,
 		careerStartedAt: input.careerStartedAt,
-		careerLoad: 0
+		careerLoad: 0,
+		health: { eligible: true, performanceMultiplier: 1, activeConditionIds: [] }
 	});
 });

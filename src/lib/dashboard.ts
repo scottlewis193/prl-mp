@@ -112,7 +112,7 @@ export type DashboardNewsItem = {
 	id: string;
 	headline: string;
 	summary: string;
-	category: 'race_result';
+	category: 'race_result' | 'health_onset' | 'health_recovery';
 	importance: number;
 	publishedAt: string;
 	links: DashboardNewsLink[];
@@ -426,6 +426,9 @@ function watchedActivitySummary(
 function priceReasonLabel(reason: RacerPricePoint['reason']): string {
 	if (!reason) return '';
 	if (typeof reason === 'string') return ` · ${reason}`;
+	if (reason.type === 'health') {
+		return ` · Health ${reason.transition} (${reason.severity})`;
+	}
 	return ` · Race result (${ordinal(reason.position)} of ${reason.fieldSize})`;
 }
 

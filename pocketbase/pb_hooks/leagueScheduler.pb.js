@@ -16,6 +16,17 @@ routerAdd(
 			record.unmarshalJSONField('status', status);
 			return status;
 		};
+		const schedulerEligible = (record) => {
+			try {
+				const health = JSON.parse(toString(record.get('health'))) || {};
+				if (typeof health.eligible === 'boolean') {
+					return health.eligible && !schedulerStatus(record).injured;
+				}
+			} catch {
+				// Legacy records continue to use the status projection.
+			}
+			return !schedulerStatus(record).injured;
+		};
 		const schedulerRanking = (record) => {
 			const stats = new DynamicModel({ ranking: 0 });
 			record.unmarshalJSONField('stats', stats);
@@ -170,7 +181,7 @@ routerAdd(
 					});
 				for (const racer of leagueRacers) ensureSeasonStanding(txApp, activeSeason.id, racer);
 				const availableRacers = leagueRacers
-					.filter((racer) => !racer.getString('race') && !schedulerStatus(racer).injured)
+					.filter((racer) => !racer.getString('race') && schedulerEligible(racer))
 					.map((racer) => ({ racer, ranking: schedulerRanking(racer) }))
 					.sort(
 						(left, right) =>
@@ -212,6 +223,13 @@ routerAdd(
 								0,
 								{ raceId }
 							);
+							for (let index = scheduledRacers.length - 1; index >= 0; index -= 1) {
+								const racer = scheduledRacers[index];
+								if (schedulerEligible(racer)) continue;
+								racer.set('race', null);
+								txApp.save(racer);
+								scheduledRacers.splice(index, 1);
+							}
 							const league = leagueById[race.getString('league')];
 							if (league) {
 								const capacity = Math.max(1, league.getInt('maxPlayers'));
@@ -224,10 +242,8 @@ routerAdd(
 									result.assignedRacers += 1;
 								}
 							}
-							if (scheduledRacers.length >= 2) {
-								exposeWinnerMarket(race, scheduledRacers, new Date(eventStartMs).toISOString());
-								txApp.save(race);
-							}
+							exposeWinnerMarket(race, scheduledRacers, new Date(eventStartMs).toISOString());
+							txApp.save(race);
 						}
 						if (
 							Number.isFinite(eventStartMs) &&
