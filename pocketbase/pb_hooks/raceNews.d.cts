@@ -1,0 +1,31 @@
+type NewsEntity = { id: string; name: string };
+type RaceResultFacts = {
+	eventId: string;
+	occurredAt: string;
+	race: NewsEntity;
+	winner: NewsEntity;
+	finishers: NewsEntity[];
+	trainers: NewsEntity[];
+	league: NewsEntity;
+	track: NewsEntity;
+};
+
+declare const raceNews: {
+	stableTemplateIndex(value: string, templateCount: number): number;
+	buildRaceResultStory(facts: RaceResultFacts): {
+		headline: string;
+		summary: string;
+		category: 'race_result';
+		importance: number;
+		publishedAt: string;
+		templateVersion: 'race-result-v1';
+		links: Array<{
+			kind: 'race' | 'racer' | 'trainer' | 'league' | 'track';
+			id: string;
+			label: string;
+			href: string;
+		}>;
+	};
+};
+
+export = raceNews;

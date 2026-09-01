@@ -427,6 +427,27 @@ routerAdd(
 			race.set('status', plan.race.status);
 			txApp.save(race);
 
+			const finisherFacts = plan.race.finishingOrder.map((racerId) => ({
+				id: racerId,
+				name: racerById[racerId].getString('name')
+			}));
+			const trainerIds = Object.keys(affectedTrainerIds).sort();
+			const leagueId = race.getString('league');
+			const trackId = race.getString('racetrack');
+			if (!leagueId) throw e.badRequestError('Race news requires a league.', {});
+			const league = txApp.findRecordById('leagues', leagueId);
+			const track = txApp.findRecordById('racetracks', trackId);
+			const newsContext = {
+				race: { id: raceId, name: race.getString('name') },
+				winner: finisherFacts[0],
+				finishers: finisherFacts,
+				trainers: trainerIds.map((trainerId) => {
+					const trainer = txApp.findRecordById('trainers', trainerId);
+					return { id: trainerId, name: trainer.getString('name') };
+				}),
+				league: { id: leagueId, name: league.getString('name') },
+				track: { id: trackId, name: track.getString('name') }
+			};
 			const settlementEvent = new Record(txApp.findCollectionByNameOrId('events'));
 			settlementEvent.set('type', 'RaceSettled');
 			settlementEvent.set('idempotencyKey', `race-settled:${raceId}`);
@@ -440,9 +461,31 @@ routerAdd(
 				finishingOrder: plan.race.finishingOrder,
 				awardedPrizes: plan.race.awardedPrizes,
 				trainerResults: trainerResultFacts,
-				seasonPoints: seasonPointFacts
+				seasonPoints: seasonPointFacts,
+				newsContext
 			});
 			txApp.save(settlementEvent);
+
+			const story = require(`${__hooks}/raceNews.cjs`).buildRaceResultStory({
+				eventId: settlementEvent.id,
+				occurredAt: plan.race.endTime,
+				...newsContext
+			});
+			const newsItem = new Record(txApp.findCollectionByNameOrId('news'));
+			newsItem.set('sourceEvent', settlementEvent.id);
+			newsItem.set('race', raceId);
+			newsItem.set('racers', plan.race.finishingOrder);
+			newsItem.set('trainers', trainerIds);
+			newsItem.set('league', leagueId);
+			newsItem.set('track', trackId);
+			newsItem.set('category', story.category);
+			newsItem.set('importance', story.importance);
+			newsItem.set('publishedAt', story.publishedAt);
+			newsItem.set('headline', story.headline);
+			newsItem.set('summary', story.summary);
+			newsItem.set('templateVersion', story.templateVersion);
+			newsItem.set('links', story.links);
+			txApp.save(newsItem);
 			settled = true;
 		});
 

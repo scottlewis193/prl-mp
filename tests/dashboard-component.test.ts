@@ -200,7 +200,32 @@ const populatedDashboard = {
 			fromPosition: 1,
 			occurredAt: '2026-07-31T12:00:00Z'
 		}
-	]
+	],
+	news: {
+		items: [
+			{
+				id: 'news-1',
+				headline: 'Bolt wins Indigo Cup',
+				summary: 'Bolt won at Indigo Circuit; Dash finished second.',
+				category: 'race_result' as const,
+				importance: 70,
+				publishedAt: '2026-09-01T14:05:00Z',
+				links: [
+					{
+						kind: 'race' as const,
+						id: 'race-recent',
+						label: 'Indigo Cup',
+						href: '/races/race-recent'
+					},
+					{ kind: 'racer' as const, id: 'racer-1', label: 'Bolt', href: '/exchange' },
+					{ kind: 'trainer' as const, id: 'trainer-1', label: 'Misty', href: '/trainers' }
+				]
+			}
+		],
+		page: 1,
+		totalPages: 2,
+		category: 'race_result'
+	}
 };
 
 test('dashboard renders live account, holdings, race and watched-racer information', async () => {
@@ -241,6 +266,11 @@ test('dashboard renders live account, holdings, race and watched-racer informati
 		assert.match(body, /Season 0.*Starter League.*Bolt.*60.*Champion/is);
 		assert.match(body, /Promotion and relegation history/i);
 		assert.match(body, /Dash.*Promoted.*Academy League.*Starter League.*Season 0/is);
+		assert.match(body, /League news.*Bolt wins Indigo Cup/is);
+		assert.match(body, /Bolt won at Indigo Circuit.*Dash finished second/is);
+		assert.match(body, /href="\/races\/race-recent"[^>]*>Indigo Cup/is);
+		assert.match(body, /href="\/trainers"[^>]*>Misty/is);
+		assert.match(body, /Next page/i);
 		assert.doesNotMatch(body, /Send Test Notification|Avatar Tailwind|>Test</);
 	} finally {
 		await cleanup();
@@ -283,7 +313,8 @@ test('dashboard renders useful loading, backend-error and section-level empty st
 					watchedActivity: [],
 					leagueTables: [],
 					priorSeasons: [],
-					racerMovementHistory: []
+					racerMovementHistory: [],
+					news: { items: [], page: 1, totalPages: 1, category: null }
 				}
 			}
 		}).body;
@@ -294,6 +325,7 @@ test('dashboard renders useful loading, backend-error and section-level empty st
 		assert.match(empty, /No active league tables are available/i);
 		assert.match(empty, /No completed seasons yet/i);
 		assert.match(empty, /No promotion or relegation history yet/i);
+		assert.match(empty, /No league news has been published yet/i);
 	} finally {
 		await cleanup();
 	}

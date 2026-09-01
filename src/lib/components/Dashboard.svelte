@@ -58,6 +58,59 @@
 	</section>
 {:else if dashboard}
 	<div class="grid h-full w-full gap-4 overflow-y-auto p-4 lg:grid-cols-2 xl:grid-cols-3">
+		<section class="card card-border bg-base-200 lg:col-span-2 xl:col-span-3">
+			<div class="card-body">
+				<div class="flex flex-wrap items-center justify-between gap-3">
+					<h1 class="card-title">League news</h1>
+					<nav aria-label="News categories" class="flex gap-2">
+						<a class:btn-active={!dashboard.news.category} class="btn btn-sm" href="/">All</a>
+						<a
+							class:btn-active={dashboard.news.category === 'race_result'}
+							class="btn btn-sm"
+							href="/?newsCategory=race_result">Race results</a
+						>
+					</nav>
+				</div>
+				{#if dashboard.news.items.length === 0}
+					<p class="text-base-content/70">No league news has been published yet.</p>
+				{:else}
+					<div class="grid gap-3 lg:grid-cols-2">
+						{#each dashboard.news.items as item (item.id)}
+							<article class="border-base-300 rounded-box border p-4">
+								<p class="text-base-content/60 text-xs uppercase">
+									Race result · Importance {item.importance}
+								</p>
+								<h2 class="text-xl font-bold">{item.headline}</h2>
+								<p>{item.summary}</p>
+								<p class="text-base-content/70 mt-2 text-sm">{activityTime(item.publishedAt)}</p>
+								<nav aria-label={`Links for ${item.headline}`} class="mt-3 flex flex-wrap gap-3">
+									{#each item.links as link (`${link.kind}-${link.id}`)}
+										<a class="link link-hover" href={link.href}>{link.label}</a>
+									{/each}
+								</nav>
+							</article>
+						{/each}
+					</div>
+					<nav aria-label="News pagination" class="join self-center">
+						{#if dashboard.news.page > 1}
+							<a
+								class="join-item btn btn-sm"
+								href={`/?newsPage=${dashboard.news.page - 1}${dashboard.news.category ? `&newsCategory=${dashboard.news.category}` : ''}`}
+								>Previous page</a
+							>
+						{/if}
+						{#if dashboard.news.page < dashboard.news.totalPages}
+							<a
+								class="join-item btn btn-sm"
+								href={`/?newsPage=${dashboard.news.page + 1}${dashboard.news.category ? `&newsCategory=${dashboard.news.category}` : ''}`}
+								>Next page</a
+							>
+						{/if}
+					</nav>
+				{/if}
+			</div>
+		</section>
+
 		<section class="card card-border bg-base-200 lg:col-span-2 xl:col-span-1">
 			<div class="card-body">
 				<h1 class="card-title">Your account</h1>

@@ -418,6 +418,40 @@ test('settles a finished race atomically and remains unchanged when settlement i
 		filter: `idempotencyKey = "race-settled:${raceId}"`
 	});
 	assert.equal(settlementEvents.length, 1);
+	const newsItems = await firstWorker.collection('news').getFullList({
+		filter: `sourceEvent = "${settlementEvents[0].id}"`
+	});
+	assert.equal(newsItems.length, 1);
+	assert.equal(newsItems[0].race, raceId);
+	assert.deepEqual(
+		newsItems[0].racers,
+		[...racers].reverse().map((racer) => racer.id)
+	);
+	assert.equal(newsItems[0].track, settledRace.racetrack);
+	assert.equal(newsItems[0].league, settledRace.league);
+	assert.equal(newsItems[0].category, 'race_result');
+	assert.equal(newsItems[0].importance, 70);
+	assert.equal(newsItems[0].sourceEvent, settlementEvents[0].id);
+	assert.match(newsItems[0].headline, new RegExp(racers.at(-1)?.name as string));
+	assert.match(newsItems[0].summary, new RegExp(settledRace.name));
+	const [newsLeague, newsTrack, ...newsTrainers] = await Promise.all([
+		firstWorker.collection('leagues').getOne(settledRace.league),
+		firstWorker.collection('racetracks').getOne(settledRace.racetrack),
+		...newsItems[0].trainers.map((trainerId: string) =>
+			firstWorker.collection('trainers').getOne(trainerId)
+		)
+	]);
+	assert.deepEqual(settlementEvents[0].facts.newsContext, {
+		race: { id: raceId, name: settledRace.name },
+		winner: {
+			id: racers.at(-1)?.id,
+			name: racers.at(-1)?.name
+		},
+		finishers: [...racers].reverse().map((racer) => ({ id: racer.id, name: racer.name })),
+		trainers: newsTrainers.map((trainer) => ({ id: trainer.id, name: trainer.name })),
+		league: { id: newsLeague.id, name: newsLeague.name },
+		track: { id: newsTrack.id, name: newsTrack.name }
+	});
 	assert.deepEqual(
 		{
 			raceId: settlementEvents[0].facts.raceId,
@@ -436,6 +470,10 @@ test('settles a finished race atomically and remains unchanged when settlement i
 		filter: `race = "${raceId}"`,
 		sort: 'position'
 	});
+	assert.deepEqual(
+		new Set(newsItems[0].trainers),
+		new Set(trainerResults.map((result) => result.trainer).filter(Boolean))
+	);
 	assert.equal(trainerResults.length, racers.length);
 	const rosterMovedResult = trainerResults.find((result) => result.racer === rosterMovedRacer.id);
 	assert.equal(rosterMovedResult?.trainer, entryTrainerId);
@@ -536,6 +574,7 @@ test('settles a finished race atomically and remains unchanged when settlement i
 		racers: settledRacers,
 		wagers: settledWagers,
 		events: settlementEvents,
+		news: newsItems,
 		trainerResults,
 		trainerCareers,
 		balance: refreshedAfterPayout.record.balance
@@ -547,6 +586,9 @@ test('settles a finished race atomically and remains unchanged when settlement i
 			wagers: await secondWorker.collection('wagers').getFullList({ sort: 'selection' }),
 			events: await secondWorker.collection('events').getFullList({
 				filter: `idempotencyKey = "race-settled:${raceId}"`
+			}),
+			news: await secondWorker.collection('news').getFullList({
+				filter: `sourceEvent = "${settlementEvents[0].id}"`
 			}),
 			trainerResults: await secondWorker.collection('trainerRaceResults').getFullList({
 				filter: `race = "${raceId}"`,

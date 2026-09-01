@@ -11,6 +11,11 @@ function dashboardClient(records: Record<string, unknown>) {
 					const value = records[name];
 					if (value instanceof Error) throw value;
 					return value ?? [];
+				},
+				getList: async (page: number, _perPage?: number, _options?: unknown) => {
+					const value = records[name];
+					if (value instanceof Error) throw value;
+					return { items: value ?? [], page, totalPages: value ? 2 : 0 };
 				}
 			};
 		}
@@ -116,6 +121,56 @@ test('authenticated dashboard repository aggregates the player account and live 
 				}
 			]
 		}
+	]);
+});
+
+test('dashboard repository exposes a filtered, paginated importance-ordered news feed', async () => {
+	const calls: unknown[] = [];
+	const client = dashboardClient({
+		news: [
+			{
+				id: 'news-1',
+				headline: 'Bolt wins Indigo Cup',
+				summary: 'Bolt won at Indigo Circuit; Dash finished second.',
+				category: 'race_result',
+				importance: 70,
+				publishedAt: '2026-09-01T14:05:00Z',
+				links: [{ kind: 'race', id: 'race-1', label: 'Indigo Cup', href: '/races/race-1' }]
+			}
+		]
+	});
+	const originalCollection = client.collection.bind(client);
+	client.collection = ((name: string) => {
+		const collection = originalCollection(name);
+		if (name !== 'news') return collection;
+		const originalGetList = collection.getList;
+		collection.getList = async (...args: [number, number?, unknown?]) => {
+			calls.push(args);
+			return originalGetList(...args);
+		};
+		return collection;
+	}) as never;
+
+	const result = await loadDashboard(
+		client as never,
+		{ id: 'player-1', balance: 0, watchlist: [] },
+		{ newsPage: 2, newsCategory: 'race_result' }
+	);
+
+	assert.equal(result.news.page, 2);
+	assert.equal(result.news.totalPages, 2);
+	assert.equal(result.news.category, 'race_result');
+	assert.equal(result.news.items[0]?.headline, 'Bolt wins Indigo Cup');
+	assert.deepEqual(calls, [
+		[
+			2,
+			5,
+			{
+				sort: '-importance,-publishedAt,-id',
+				filter: 'category = "race_result"',
+				fields: 'id,headline,summary,category,importance,publishedAt,links'
+			}
+		]
 	]);
 });
 

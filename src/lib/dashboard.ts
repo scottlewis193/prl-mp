@@ -101,6 +101,30 @@ export type DashboardRaceRecord = {
 
 export type DashboardTrackRecord = { id: string; name: string };
 
+export type DashboardNewsLink = {
+	kind: 'race' | 'racer' | 'trainer' | 'league' | 'track';
+	id: string;
+	label: string;
+	href: string;
+};
+
+export type DashboardNewsItem = {
+	id: string;
+	headline: string;
+	summary: string;
+	category: 'race_result';
+	importance: number;
+	publishedAt: string;
+	links: DashboardNewsLink[];
+};
+
+export type DashboardNewsPage = {
+	items: DashboardNewsItem[];
+	page: number;
+	totalPages: number;
+	category: string | null;
+};
+
 export type DashboardHolding = {
 	racerId: string;
 	racerName: string;
@@ -197,6 +221,7 @@ export type DashboardView = {
 	leagueTables: DashboardLeagueTable[];
 	priorSeasons: DashboardPriorSeason[];
 	racerMovementHistory: DashboardRacerMovement[];
+	news: DashboardNewsPage;
 };
 
 type DashboardInput = {
@@ -213,6 +238,7 @@ type DashboardInput = {
 	standings?: DashboardStandingRecord[];
 	seasonAwards?: DashboardSeasonAwardRecord[];
 	leagueMovements?: DashboardLeagueMovementRecord[];
+	news?: DashboardNewsPage;
 	now?: Date;
 };
 
@@ -568,6 +594,7 @@ export function aggregateDashboard(input: DashboardInput): DashboardView {
 			input.seasons ?? [],
 			input.leagues ?? [],
 			racersById
-		)
+		),
+		news: input.news ?? { items: [], page: 1, totalPages: 1, category: null }
 	};
 }

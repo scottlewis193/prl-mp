@@ -4,6 +4,7 @@ import type {
 	DashboardHoldingRecord,
 	DashboardLeagueRecord,
 	DashboardLedgerEntry,
+	DashboardNewsItem,
 	DashboardRacerRecord,
 	DashboardRaceRecord,
 	DashboardLeagueMovementRecord,
@@ -20,7 +21,13 @@ type DashboardUser = {
 	watchlist?: unknown;
 };
 
-export async function loadDashboard(pb: PocketBase, user: DashboardUser) {
+export async function loadDashboard(
+	pb: PocketBase,
+	user: DashboardUser,
+	options: { newsPage?: number; newsCategory?: string | null } = {}
+) {
+	const newsPage = Math.max(1, Math.trunc(options.newsPage ?? 1));
+	const newsCategory = options.newsCategory === 'race_result' ? options.newsCategory : null;
 	const [
 		ledger,
 		wagers,
@@ -32,7 +39,8 @@ export async function loadDashboard(pb: PocketBase, user: DashboardUser) {
 		leagues,
 		standings,
 		seasonAwards,
-		leagueMovements
+		leagueMovements,
+		news
 	] = await Promise.all([
 		pb.collection('accountLedger').getFullList({
 			sort: '-occurredAt',
@@ -73,6 +81,11 @@ export async function loadDashboard(pb: PocketBase, user: DashboardUser) {
 		pb.collection('leagueMovements').getFullList({
 			sort: '-occurredAt,racer',
 			fields: 'season,racer,fromLeague,toLeague,direction,fromPosition,occurredAt'
+		}),
+		pb.collection('news').getList(newsPage, 5, {
+			sort: '-importance,-publishedAt,-id',
+			filter: newsCategory ? `category = "${newsCategory}"` : '',
+			fields: 'id,headline,summary,category,importance,publishedAt,links'
 		})
 	]);
 
@@ -89,6 +102,12 @@ export async function loadDashboard(pb: PocketBase, user: DashboardUser) {
 		leagues: leagues as unknown as DashboardLeagueRecord[],
 		standings: standings as unknown as DashboardStandingRecord[],
 		seasonAwards: seasonAwards as unknown as DashboardSeasonAwardRecord[],
-		leagueMovements: leagueMovements as unknown as DashboardLeagueMovementRecord[]
+		leagueMovements: leagueMovements as unknown as DashboardLeagueMovementRecord[],
+		news: {
+			items: news.items as unknown as DashboardNewsItem[],
+			page: news.page,
+			totalPages: Math.max(1, news.totalPages),
+			category: newsCategory
+		}
 	});
 }

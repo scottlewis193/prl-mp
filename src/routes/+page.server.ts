@@ -16,7 +16,11 @@ export const load = async ({ url, locals }) => {
 			}
 		};
 	}
-	const dashboardState = loadDashboard(locals.pb, locals.user)
+	const requestedPage = Number(url.searchParams.get('newsPage') ?? 1);
+	const dashboardState = loadDashboard(locals.pb, locals.user, {
+		newsPage: Number.isFinite(requestedPage) ? requestedPage : 1,
+		newsCategory: url.searchParams.get('newsCategory')
+	})
 		.then((dashboard) => ({ dashboard, error: null }))
 		.catch((error) => {
 			console.error('Dashboard data load failed:', error);
