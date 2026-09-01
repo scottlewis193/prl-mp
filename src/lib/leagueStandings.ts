@@ -24,7 +24,7 @@ export function orderLeagueStandings(standings: LeagueStanding[]): LeagueStandin
 export function pointsForRaceSettlement(
 	raceFormat: { type?: string; ranked?: boolean; rulesVersion?: string } | undefined,
 	pointsCurve: number[],
-	finisherCount: number
+	positionsOrFinisherCount: number | number[]
 ): number[] | null {
-	return standingsRules.pointsForRaceSettlement(raceFormat, pointsCurve, finisherCount);
+	return standingsRules.pointsForRaceSettlement(raceFormat, pointsCurve, positionsOrFinisherCount);
 }

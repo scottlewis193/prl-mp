@@ -1,4 +1,23 @@
-import type { Racer, RaceTrackType } from './types';
+import type { RaceClassEntry, Racer, RaceTrackType } from './types';
+
+export function classifyRacePositions(orderedRacerIds: string[], classEntries: RaceClassEntry[]) {
+	const entryByRacer = new Map(classEntries.map((entry) => [entry.racerId, entry]));
+	const classCounts = new Map<string, number>();
+	return orderedRacerIds.flatMap((racerId, index) => {
+		const entry = entryByRacer.get(racerId);
+		if (!entry) return [];
+		const classPosition = (classCounts.get(entry.classId) ?? 0) + 1;
+		classCounts.set(entry.classId, classPosition);
+		return [
+			{
+				racerId,
+				overallPosition: index + 1,
+				classPosition,
+				className: entry.className
+			}
+		];
+	});
+}
 
 export function getRacerProgress(racer: Racer, racetrack: RaceTrackType): number {
 	const completedCheckpointDistance = racetrack.checkpoints

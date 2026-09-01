@@ -7,7 +7,14 @@ import { createEmptyTrainerCareer } from './trainerCareer';
 
 export type { RaceFormat } from './raceFormat';
 
-export type AwardedPrize = { racerId: string; position: number; amount: number };
+export type AwardedPrize = {
+	racerId: string;
+	position: number;
+	classPosition?: number;
+	amount: number;
+};
+export type RaceClassEntry = { racerId: string; classId: string; className: string };
+export type RaceClassResult = RaceClassEntry & { overallPosition: number; classPosition: number };
 
 export type RaceValuationReason = {
 	type: 'race_result';
@@ -89,7 +96,8 @@ export type RaceCompetitionFormat = {
 export type RaceEligibilityPolicy = {
 	activeOnly: boolean;
 	healthEligible: boolean;
-	leagueId: string;
+	leagueId?: string;
+	leagueIds?: string[];
 	retired: boolean;
 	trainerRequired: boolean;
 };
@@ -114,6 +122,8 @@ export type RaceType = {
 	racetrack: string;
 	winner: string;
 	finishingOrder: string[];
+	classEntries?: RaceClassEntry[];
+	classResults?: RaceClassResult[];
 	prizeCurve?: number[];
 	pointsCurve?: number[];
 	prizeScale?: number;
@@ -155,6 +165,8 @@ export class Race implements RaceType {
 	racetrack: string = '175hl67e5pvjjib';
 	winner: string = '';
 	finishingOrder: string[] = [];
+	classEntries?: RaceClassEntry[] = [];
+	classResults?: RaceClassResult[] = [];
 	prizeCurve?: number[] = [];
 	pointsCurve?: number[] = [];
 	prizeScale?: number = 0;
@@ -701,7 +713,13 @@ export type Wager = {
 
 export type EventType = {
 	id: string;
-	type: 'DailyLeagueRaces' | 'ExhibitionRace' | 'RaceSettled' | 'HealthOnset' | 'HealthRecovery';
+	type:
+		| 'DailyLeagueRaces'
+		| 'ExhibitionRace'
+		| 'GrandPrix'
+		| 'RaceSettled'
+		| 'HealthOnset'
+		| 'HealthRecovery';
 	scheduleKey?: string;
 	startTime?: Date;
 	idempotencyKey?: string;
@@ -710,6 +728,7 @@ export type EventType = {
 		raceId?: string;
 		winnerId?: string;
 		finishingOrder?: string[];
+		classResults?: RaceClassResult[];
 		awardedPrizes?: AwardedPrize[];
 		seasonPoints?: { racerId: string; position: number; points: number }[];
 		racerId?: string;

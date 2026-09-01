@@ -1,6 +1,6 @@
 import settlementRules from '../../../pocketbase/pb_hooks/raceSettlement.cjs';
 
-import type { AwardedPrize, Race, Racer } from '$lib/types';
+import type { AwardedPrize, Race, RaceClassResult, Racer } from '$lib/types';
 
 export type RaceSettlement = {
 	race: {
@@ -9,6 +9,7 @@ export type RaceSettlement = {
 		winner: string;
 		endTime: string;
 		finishingOrder: string[];
+		classResults?: RaceClassResult[];
 		awardedPrizes: AwardedPrize[];
 	};
 	racers: Racer[];
@@ -35,7 +36,8 @@ export function buildRaceSettlement(
 	const plan = settlementRules.buildRaceSettlement({
 		raceId: race.id ?? '',
 		participants: racers.map(toSettlementParticipant),
-		prizeCurve
+		prizeCurve,
+		classEntries: race.classEntries
 	});
 
 	return {

@@ -8,6 +8,7 @@
 	import { onMount } from 'svelte';
 	import { flip } from 'svelte/animate';
 	import { getUserContext } from '$lib/stores/user.svelte';
+	import { classifyRacePositions } from '$lib/raceProgress';
 
 	let racers = getCurrentRacersContext();
 	let camera = getCameraContext();
@@ -102,6 +103,14 @@
 	let mode: 'Interval' | 'Leader' = $state(
 		user?.options?.raceViewer?.leaderboardMode === 'leader' ? 'Leader' : 'Interval'
 	);
+	const liveClassPositions = $derived(
+		new Map(
+			classifyRacePositions(
+				sortedRacers.flatMap((racer) => (racer.id ? [racer.id] : [])),
+				race?.classEntries ?? []
+			).map((position) => [position.racerId, position])
+		)
+	);
 
 	onMount(() => {
 		//sort racers in 1 second intervals
@@ -137,7 +146,7 @@
 				/>
 			</svg>
 		</button>
-		<div id="leaderboard" class="hidden w-[300px]">
+		<div id="leaderboard" class="hidden w-[360px]">
 			<ul class="list bg-base-200 rounded-box shadow-md">
 				<li class="p-4 pb-2 text-xs tracking-wide opacity-60">
 					Lap {sortedRacers[0]?.currentRace.lapsCompleted + 1} / {race?.totalLaps}
@@ -145,6 +154,7 @@
 
 				{#each sortedRacers as racer (racer.id)}
 					{@const pokemon = racer.expand.pokemon as Pokemon}
+					{@const classPosition = racer.id ? liveClassPositions.get(racer.id) : undefined}
 					<li
 						class="cursor-pointer"
 						onclick={() => {
@@ -159,7 +169,13 @@
 							<div
 								class="flex h-full w-7 items-center justify-center text-xl font-thin tabular-nums opacity-30"
 							>
-								{sortedRacers.indexOf(racer) + 1}
+								{#if classPosition}
+									<span title={`${classPosition.className} class`}
+										>O{classPosition.overallPosition} · C{classPosition.classPosition}</span
+									>
+								{:else}
+									{sortedRacers.indexOf(racer) + 1}
+								{/if}
 							</div>
 							<div class="pt-[0.1rem]">
 								<img

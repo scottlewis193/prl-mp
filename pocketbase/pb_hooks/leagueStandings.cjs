@@ -37,18 +37,27 @@ function orderLeagueStandings(standings) {
 	});
 }
 
-function pointsForRaceSettlement(raceFormat, pointsCurve, finisherCount) {
-	if (!raceFormat || raceFormat.type !== 'league_race' || raceFormat.ranked !== true) return null;
+function pointsForRaceSettlement(raceFormat, pointsCurve, positionsOrFinisherCount) {
 	if (
-		!Number.isInteger(finisherCount) ||
-		finisherCount < 1 ||
+		!raceFormat ||
+		!['league_race', 'grand_prix'].includes(raceFormat.type) ||
+		raceFormat.ranked !== true
+	) {
+		return null;
+	}
+	const positions = Array.isArray(positionsOrFinisherCount)
+		? positionsOrFinisherCount
+		: Array.from({ length: positionsOrFinisherCount }, (_, index) => index + 1);
+	if (
+		positions.length < 1 ||
+		positions.some((position) => !Number.isInteger(position) || position < 1) ||
 		!Array.isArray(pointsCurve) ||
-		pointsCurve.length < finisherCount ||
+		pointsCurve.length < Math.max(...positions) ||
 		pointsCurve.some((points) => !Number.isFinite(Number(points)) || Number(points) < 0)
 	) {
-		throw new Error('The ranked League Race points curve is invalid');
+		throw new Error('The ranked race points curve is invalid');
 	}
-	return pointsCurve.slice(0, finisherCount).map(Number);
+	return positions.map((position) => Number(pointsCurve[position - 1]));
 }
 
 function compareBestFinish(left, right) {

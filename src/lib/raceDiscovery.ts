@@ -12,6 +12,8 @@ type RaceResult = {
 	racerId: string;
 	racerName: string;
 	prizeMoney?: number;
+	className?: string;
+	classPosition?: number;
 };
 
 export type RacePresentation = {
@@ -92,6 +94,9 @@ export function presentRace(
 	const prizeByRacer = new Map(
 		(race.awardedPrizes ?? []).map((prize) => [prize.racerId, prize.amount])
 	);
+	const classResultByRacer = new Map(
+		(race.classResults ?? []).map((result) => [result.racerId, result])
+	);
 	const track = tracks.find((candidate) => candidate.id === race.racetrack);
 	return {
 		race,
@@ -105,12 +110,18 @@ export function presentRace(
 			position: index + 1,
 			amount
 		})),
-		results: finishingOrder.map((racerId, index) => ({
-			position: index + 1,
-			racerId,
-			racerName: racerById.get(racerId)?.name ?? 'Unknown racer',
-			prizeMoney: prizeByRacer.get(racerId)
-		}))
+		results: finishingOrder.map((racerId, index) => {
+			const classResult = classResultByRacer.get(racerId);
+			return {
+				position: index + 1,
+				racerId,
+				racerName: racerById.get(racerId)?.name ?? 'Unknown racer',
+				prizeMoney: prizeByRacer.get(racerId),
+				...(classResult
+					? { className: classResult.className, classPosition: classResult.classPosition }
+					: {})
+			};
+		})
 	};
 }
 

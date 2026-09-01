@@ -15,7 +15,9 @@ type SettlementParticipant = {
 	totalShares: number;
 };
 
-type AwardedPrize = { racerId: string; position: number; amount: number };
+type AwardedPrize = { racerId: string; position: number; classPosition?: number; amount: number };
+type RaceClassEntry = { racerId: string; classId: string; className: string };
+type RaceClassResult = RaceClassEntry & { overallPosition: number; classPosition: number };
 
 type SettlementPlan = {
 	race: {
@@ -24,6 +26,7 @@ type SettlementPlan = {
 		winner: string;
 		endTime: string;
 		finishingOrder: string[];
+		classResults?: RaceClassResult[];
 		awardedPrizes: AwardedPrize[];
 	};
 	racers: Array<{
@@ -44,6 +47,7 @@ declare const settlementRules: {
 		raceId: string;
 		participants: SettlementParticipant[];
 		prizeCurve: number[];
+		classEntries?: RaceClassEntry[];
 	}): SettlementPlan;
 };
 

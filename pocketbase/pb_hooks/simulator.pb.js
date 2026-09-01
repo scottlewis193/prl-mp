@@ -217,7 +217,7 @@ routerAdd(
 					gender: 'male'
 				});
 				racer.unmarshalJSONField('stats', stats);
-				const financials = new DynamicModel({
+				let financials = {
 					totalEarnings: 0,
 					earningsPerShare: 0,
 					lastPayoutAt: '',
@@ -225,8 +225,13 @@ routerAdd(
 					outstandingShares: 0,
 					currentSharePrice: 0,
 					priceHistory: []
-				});
-				racer.unmarshalJSONField('financials', financials);
+				};
+				try {
+					financials = {
+						...financials,
+						...(JSON.parse(toString(racer.get('financials'))) || {})
+					};
+				} catch {}
 				const ownership = new DynamicModel({ totalShares: 0, shareholders: [] });
 				racer.unmarshalJSONField('ownership', ownership);
 				racerById[racer.id] = racer;
@@ -286,7 +291,14 @@ routerAdd(
 				plan = settlementRules.buildRaceSettlement({
 					raceId,
 					participants,
-					prizeCurve: JSON.parse(toString(storedPrizeCurve))
+					prizeCurve: JSON.parse(toString(storedPrizeCurve)),
+					classEntries: (() => {
+						try {
+							return JSON.parse(toString(race.get('classEntries'))) || [];
+						} catch {
+							return [];
+						}
+					})()
 				});
 			} catch (error) {
 				throw e.badRequestError(error.message, {});
@@ -342,22 +354,26 @@ routerAdd(
 							return [];
 						}
 					})(),
-					plan.race.finishingOrder.length
+					plan.race.classResults?.map((result) => result.classPosition) ||
+						plan.race.finishingOrder.length
 				);
 			} catch (error) {
 				throw e.badRequestError(error.message, {});
 			}
 			if (awardedPoints) {
 				const seasonId = race.getString('season');
-				const leagueId = race.getString('league');
-				if (!seasonId || !leagueId) {
-					throw e.badRequestError('A ranked League Race requires season and points snapshots.', {});
+				const raceLeagueId = race.getString('league');
+				if (!seasonId || (!raceLeagueId && !plan.race.classResults?.length)) {
+					throw e.badRequestError('A ranked race requires season and class snapshots.', {});
 				}
 
 				const standingCollection = txApp.findCollectionByNameOrId('leagueStandings');
 				const standingsRules = require(`${__hooks}/leagueStandings.cjs`);
 				for (let index = 0; index < plan.race.finishingOrder.length; index += 1) {
 					const racerId = plan.race.finishingOrder[index];
+					const classResult = plan.race.classResults?.[index];
+					const leagueId = classResult?.classId || raceLeagueId;
+					const resultPosition = classResult?.classPosition || index + 1;
 					let standing;
 					try {
 						standing = txApp.findFirstRecordByFilter(
@@ -387,7 +403,7 @@ routerAdd(
 								}
 							})()
 						},
-						{ position: index + 1, points: awardedPoints[index] }
+						{ position: resultPosition, points: awardedPoints[index] }
 					);
 					standing.set('league', leagueId);
 					standing.set('points', projected.points);
@@ -401,7 +417,7 @@ routerAdd(
 					seasonPointFacts.push({
 						standingId: standing.id,
 						racerId,
-						position: index + 1,
+						position: resultPosition,
 						points: awardedPoints[index]
 					});
 				}
@@ -454,6 +470,7 @@ routerAdd(
 
 			race.set('winner', plan.race.winner);
 			race.set('finishingOrder', plan.race.finishingOrder);
+			if (plan.race.classResults) race.set('classResults', plan.race.classResults);
 			race.set('awardedPrizes', plan.race.awardedPrizes);
 			race.set('endTime', plan.race.endTime);
 			race.set('status', plan.race.status);
@@ -464,7 +481,7 @@ routerAdd(
 				name: racerById[racerId].getString('name')
 			}));
 			const trainerIds = Object.keys(affectedTrainerIds).sort();
-			const leagueId = race.getString('league');
+			const leagueId = race.getString('league') || plan.race.classResults?.[0]?.classId;
 			const trackId = race.getString('racetrack');
 			if (!leagueId) throw e.badRequestError('Race news requires a league.', {});
 			const league = txApp.findRecordById('leagues', leagueId);
@@ -485,6 +502,7 @@ routerAdd(
 				raceFormat,
 				winnerId: plan.race.winner,
 				finishingOrder: plan.race.finishingOrder,
+				classResults: plan.race.classResults || [],
 				awardedPrizes: plan.race.awardedPrizes,
 				trainerResults: trainerResultFacts,
 				seasonPoints: seasonPointFacts,

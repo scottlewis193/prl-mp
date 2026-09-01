@@ -154,8 +154,13 @@
 			<ol class="rounded-box border-base-300 bg-base-200 divide-base-300 divide-y border">
 				{#each racePresentation.results as result}
 					<li class="flex items-center gap-4 p-4">
-						<strong class="w-10 text-lg">{ordinal(result.position)}</strong>
+						<strong class="min-w-20 text-lg">
+							{race.raceFormat?.type === 'grand_prix' ? 'Overall ' : ''}{ordinal(result.position)}
+						</strong>
 						<span class="flex-1">{result.racerName}</span>
+						{#if result.className && result.classPosition}
+							<span>{result.className} class {ordinal(result.classPosition)}</span>
+						{/if}
 						{#if result.prizeMoney !== undefined}
 							<span>{result.prizeMoney.toLocaleString('en-GB')} PokéD awarded</span>
 						{/if}

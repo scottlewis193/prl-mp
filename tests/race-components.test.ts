@@ -254,3 +254,42 @@ test('discovery and detail clearly identify an unranked Exhibition Race and its 
 		await detail.cleanup();
 	}
 });
+
+test('Grand Prix detail distinguishes overall and class finishing positions', async () => {
+	const grandPrix = {
+		...baseRace,
+		id: 'grand-prix-result',
+		name: 'Multi-Class Grand Prix',
+		status: 'settled',
+		startTime: '2026-09-04T12:00:00Z',
+		raceFormat: { type: 'grand_prix', ranked: true, rulesVersion: 'grand-prix-v1' },
+		winner: 'racer-1',
+		finishingOrder: ['racer-1', 'racer-2'],
+		classResults: [
+			{
+				racerId: 'racer-1',
+				classId: 'league-1',
+				className: 'Premier',
+				overallPosition: 1,
+				classPosition: 1
+			},
+			{
+				racerId: 'racer-2',
+				classId: 'league-2',
+				className: 'Challenger',
+				overallPosition: 2,
+				classPosition: 1
+			}
+		]
+	};
+	const { component, cleanup } = await serverComponent('RaceDetail');
+	try {
+		const body = render(component, { props: { race: grandPrix, racers, racetrack: track } }).body;
+		assert.match(body, /Overall 1st/);
+		assert.match(body, /Premier class 1st/);
+		assert.match(body, /Overall 2nd/);
+		assert.match(body, /Challenger class 1st/);
+	} finally {
+		await cleanup();
+	}
+});

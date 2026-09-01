@@ -111,3 +111,22 @@ test('season points apply only to a valid ranked League Race snapshot', () => {
 		/points curve/i
 	);
 });
+
+test('Grand Prix points use class positions only when its snapshot explicitly enables ranking', () => {
+	assert.deepEqual(
+		pointsForRaceSettlement(
+			{ type: 'grand_prix', ranked: true, rulesVersion: 'grand-prix-v1' },
+			[10, 6],
+			[1, 1, 2, 2]
+		),
+		[10, 10, 6, 6]
+	);
+	assert.equal(
+		pointsForRaceSettlement(
+			{ type: 'grand_prix', ranked: false, rulesVersion: 'grand-prix-v1' },
+			[10, 6],
+			[1, 1, 2, 2]
+		),
+		null
+	);
+});
