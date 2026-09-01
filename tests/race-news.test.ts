@@ -14,7 +14,14 @@ const facts = {
 	],
 	trainers: [{ id: 'trainer-1', name: 'Misty' }],
 	league: { id: 'league-1', name: 'Premier League' },
-	track: { id: 'track-1', name: 'Indigo Circuit' }
+	track: { id: 'track-1', name: 'Indigo Circuit' },
+	priceMovements: [
+		{
+			racer: { id: 'racer-1', name: 'Bolt' },
+			previousPrice: 10,
+			price: 10.8
+		}
+	]
 };
 
 test('race-result news is deterministic, factual, and links every available entity view', () => {
@@ -25,11 +32,12 @@ test('race-result news is deterministic, factual, and links every available enti
 	assert.equal(first.category, 'race_result');
 	assert.equal(first.importance, 70);
 	assert.equal(first.publishedAt, facts.occurredAt);
-	assert.equal(first.templateVersion, 'race-result-v1');
+	assert.equal(first.templateVersion, 'race-result-v2');
 	assert.match(first.headline, /Bolt/);
 	assert.match(first.summary, /Indigo Cup/);
 	assert.match(first.summary, /Dash/);
 	assert.match(first.summary, /Indigo Circuit/);
+	assert.match(first.summary, /market.*Bolt.*₽10\.00.*₽10\.80/i);
 	assert.deepEqual(first.links, [
 		{ kind: 'race', id: 'race-1', label: 'Indigo Cup', href: '/races/race-1' },
 		{ kind: 'racer', id: 'racer-1', label: 'Bolt', href: '/exchange' },

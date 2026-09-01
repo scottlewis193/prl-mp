@@ -1,12 +1,8 @@
-import type { Racer } from '$lib/types';
+import type { Racer, RacerPricePoint } from '$lib/types';
 
 export type ChartRange = '1d' | '7d' | '1m' | '3m' | '6m' | '1y' | 'all';
 
-export type PricePoint = {
-	timestamp: string;
-	price: number;
-	reason?: string;
-};
+export type PricePoint = RacerPricePoint;
 
 type NullableRange = { high: number | null; low: number | null };
 

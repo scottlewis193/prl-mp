@@ -434,6 +434,40 @@ test('settles a finished race atomically and remains unchanged when settlement i
 	assert.equal(newsItems[0].sourceEvent, settlementEvents[0].id);
 	assert.match(newsItems[0].headline, new RegExp(racers.at(-1)?.name as string));
 	assert.match(newsItems[0].summary, new RegExp(settledRace.name));
+	assert.match(newsItems[0].summary, /market.*10\.00.*10\.80/i);
+	assert.deepEqual(
+		settledRacers.map((racer) => racer.financials.currentSharePrice),
+		[9.2, 9.43, 9.66, 9.89, 10.11, 10.34, 10.57, 10.8]
+	);
+	for (const racer of settledRacers) {
+		const pricePoint = racer.financials.priceHistory.at(-1);
+		assert.equal(pricePoint.previousPrice, 10);
+		assert.equal(pricePoint.price, racer.financials.currentSharePrice);
+		assert.equal(Date.parse(pricePoint.timestamp), Date.parse(settledRace.endTime));
+		assert.equal(pricePoint.reason.type, 'race_result');
+		assert.equal(pricePoint.reason.raceId, raceId);
+		assert.equal(pricePoint.rulesVersion, 'race-valuation-v1');
+		assert.equal(pricePoint.sourceEvent, settlementEvents[0].id);
+	}
+	assert.deepEqual(
+		settlementEvents[0].facts.priceMovements.map(
+			(movement: { racerId: string; previousPrice: number; price: number }) => ({
+				racerId: movement.racerId,
+				previousPrice: movement.previousPrice,
+				price: movement.price
+			})
+		),
+		[...racers].reverse().map((racer, index) => ({
+			racerId: racer.id,
+			previousPrice: 10,
+			price: [10.8, 10.57, 10.34, 10.11, 9.89, 9.66, 9.43, 9.2][index]
+		}))
+	);
+	assert.equal(
+		(await secondWorker.collection('racers').getOne(racers.at(-1)?.id as string)).financials
+			.currentSharePrice,
+		10.8
+	);
 	const [newsLeague, newsTrack, ...newsTrainers] = await Promise.all([
 		firstWorker.collection('leagues').getOne(settledRace.league),
 		firstWorker.collection('racetracks').getOne(settledRace.racetrack),

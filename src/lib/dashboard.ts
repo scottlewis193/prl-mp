@@ -1,6 +1,6 @@
 import { formatMarketPrice } from './exchangePresentation';
 import { orderLeagueStandings } from './leagueStandings';
-import type { RaceType } from './types';
+import type { RacerPricePoint, RaceType } from './types';
 
 type RaceStatus = RaceType['status'];
 type LedgerEntryType =
@@ -36,7 +36,7 @@ export type DashboardRacerRecord = {
 	name: string;
 	financials?: {
 		currentSharePrice?: number;
-		priceHistory?: { timestamp: string; price: number; reason?: string }[];
+		priceHistory?: RacerPricePoint[];
 	};
 	raceHistory?: {
 		races?: { raceId: string; position: number; prizeMoney: number; date: string }[];
@@ -398,7 +398,7 @@ function watchedActivitySummary(
 							{
 								racerId,
 								racerName: racer.name,
-								description: `Price moved to ${formatMarketPrice(point.price)}${point.reason ? ` · ${point.reason}` : ''}`,
+								description: `Price moved to ${formatMarketPrice(point.price)}${priceReasonLabel(point.reason)}`,
 								timestamp: point.timestamp
 							}
 						]
@@ -421,6 +421,12 @@ function watchedActivitySummary(
 		})
 		.toSorted((left, right) => timestampOrZero(right.timestamp) - timestampOrZero(left.timestamp))
 		.slice(0, 5);
+}
+
+function priceReasonLabel(reason: RacerPricePoint['reason']): string {
+	if (!reason) return '';
+	if (typeof reason === 'string') return ` · ${reason}`;
+	return ` · Race result (${ordinal(reason.position)} of ${reason.fieldSize})`;
 }
 
 function orderedStandingsForLeague(

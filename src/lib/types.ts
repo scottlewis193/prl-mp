@@ -9,6 +9,28 @@ export type { RaceFormat } from './raceFormat';
 
 export type AwardedPrize = { racerId: string; position: number; amount: number };
 
+export type RaceValuationReason = {
+	type: 'race_result';
+	raceId: string;
+	position: number;
+	fieldSize: number;
+	performancePercent: number;
+	recentFormPercent: number;
+	uncappedPercent: number;
+	appliedPercent: number;
+};
+
+export type RacerPricePoint = {
+	timestamp: string;
+	previousPrice?: number;
+	price: number;
+	change?: number;
+	changePercent?: number;
+	reason?: string | RaceValuationReason;
+	rulesVersion?: string;
+	sourceEvent?: string;
+};
+
 export type RaceCompetitionFormat = {
 	type: 'league_race' | 'grand_prix' | 'exhibition' | 'legends_exhibition';
 	ranked: boolean;
@@ -143,11 +165,7 @@ type RacerType = {
 		issuedShares: number;
 		outstandingShares: number;
 		currentSharePrice: number; // e.g., 12.50 PokéD
-		priceHistory: {
-			timestamp: string;
-			price: number;
-			reason?: string; // e.g., "Race Win", "Loss", "Injury"
-		}[];
+		priceHistory: RacerPricePoint[];
 	};
 
 	//-- CLIENT (mainly for interpolation) ---
@@ -272,7 +290,7 @@ export class Racer implements RacerType {
 		issuedShares: number;
 		outstandingShares: number;
 		currentSharePrice: number;
-		priceHistory: { timestamp: string; price: number; reason?: string }[];
+		priceHistory: RacerPricePoint[];
 	} = $state({
 		totalEarnings: 0,
 		earningsPerShare: 0,

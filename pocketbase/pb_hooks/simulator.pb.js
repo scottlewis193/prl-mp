@@ -273,7 +273,7 @@ routerAdd(
 						issuedShares: financials.issuedShares,
 						outstandingShares: financials.outstandingShares,
 						currentSharePrice: financials.currentSharePrice,
-						priceHistory: financials.priceHistory
+						priceHistory: Array.from(financials.priceHistory || [])
 					},
 					totalShares: Number(ownership.totalShares) || 0
 				});
@@ -291,6 +291,38 @@ routerAdd(
 			} catch (error) {
 				throw e.badRequestError(error.message, {});
 			}
+
+			const settlementEvent = new Record(txApp.findCollectionByNameOrId('events'));
+			settlementEvent.set('type', 'RaceSettled');
+			settlementEvent.set('idempotencyKey', `race-settled:${raceId}`);
+			settlementEvent.set('occurredAt', plan.race.endTime);
+			settlementEvent.set('raceIds', [raceId]);
+			settlementEvent.set('started', true);
+			settlementEvent.set('finished', true);
+			settlementEvent.set('facts', {});
+			txApp.save(settlementEvent);
+
+			const valuationRules = require(`${__hooks}/racerValuation.cjs`);
+			const participantById = {};
+			for (const participant of participants) participantById[participant.id] = participant;
+			const priceMovements = plan.racers.map((update, index) => {
+				const participant = participantById[update.id];
+				const pricePoint = valuationRules.buildRacePricePoint({
+					raceId,
+					position: index + 1,
+					fieldSize: plan.racers.length,
+					previousPrice: update.financials.currentSharePrice,
+					recentFinishes: participant.raceHistory.races.map((result) => result.position),
+					occurredAt: plan.race.endTime,
+					sourceEvent: settlementEvent.id
+				});
+				update.financials = {
+					...update.financials,
+					currentSharePrice: pricePoint.price,
+					priceHistory: [...update.financials.priceHistory, pricePoint]
+				};
+				return { racerId: update.id, ...pricePoint };
+			});
 
 			let raceFormat = {};
 			try {
@@ -448,13 +480,6 @@ routerAdd(
 				league: { id: leagueId, name: league.getString('name') },
 				track: { id: trackId, name: track.getString('name') }
 			};
-			const settlementEvent = new Record(txApp.findCollectionByNameOrId('events'));
-			settlementEvent.set('type', 'RaceSettled');
-			settlementEvent.set('idempotencyKey', `race-settled:${raceId}`);
-			settlementEvent.set('occurredAt', plan.race.endTime);
-			settlementEvent.set('raceIds', [raceId]);
-			settlementEvent.set('started', true);
-			settlementEvent.set('finished', true);
 			settlementEvent.set('facts', {
 				raceId,
 				winnerId: plan.race.winner,
@@ -462,6 +487,7 @@ routerAdd(
 				awardedPrizes: plan.race.awardedPrizes,
 				trainerResults: trainerResultFacts,
 				seasonPoints: seasonPointFacts,
+				priceMovements,
 				newsContext
 			});
 			txApp.save(settlementEvent);
@@ -469,7 +495,14 @@ routerAdd(
 			const story = require(`${__hooks}/raceNews.cjs`).buildRaceResultStory({
 				eventId: settlementEvent.id,
 				occurredAt: plan.race.endTime,
-				...newsContext
+				...newsContext,
+				priceMovements: priceMovements.map((movement) => ({
+					...movement,
+					racer: {
+						id: movement.racerId,
+						name: racerById[movement.racerId].getString('name')
+					}
+				}))
 			});
 			const newsItem = new Record(txApp.findCollectionByNameOrId('news'));
 			newsItem.set('sourceEvent', settlementEvent.id);
